@@ -5,7 +5,7 @@
 
 const BOT_TOKEN  = process.env.BOT_TOKEN  || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
 const OWNER_ID   = process.env.OWNER_ID   || '6048050987';
-const SITE_URL   = process.env.SITE_URL   || 'https://your-site.vercel.app'; // ← তোমার site URL দাও
+const SITE_URL   = process.env.SITE_URL   || 'https://cithipathao.vercel.app'; // ← তোমার site URL দাও
 const TG_API     = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
 // ── pending replies store (in-memory; use a DB for production) ──
