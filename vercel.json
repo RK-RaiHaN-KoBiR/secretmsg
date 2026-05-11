@@ -1,12 +1,7 @@
 {
   "version": 2,
   "routes": [
-    { "src": "/api/bot", "dest": "/bot.js" },
+    { "src": "/api/bot", "dest": "/api/bot.js" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ],
-  "env": {
-    "BOT_TOKEN": "@bot_token",
-    "OWNER_ID": "@owner_id",
-    "SITE_URL": "@site_url"
-  }
+  ]
 }
