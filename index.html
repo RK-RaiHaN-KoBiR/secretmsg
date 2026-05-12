@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+  <meta name="description" content="💌 Secret Message Box — আপনার মনের গোপন কথা পাঠান। Anonymous Love Letter Platform." />
+  <meta name="theme-color" content="#ff2d78" />
+  <meta name="robots" content="noindex, nofollow" />
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="💌 Secret Message Box" />
+  <meta property="og:description" content="না বলা মনের কথা লিখুন — Anonymous & Secure" />
+  <meta property="og:type" content="website" />
+
+  <title>💌 Secret Message Box</title>
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+  <!-- Fonts (preconnect for speed) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Nunito:wght@400;600;700;800&family=Dancing+Script:wght@600;700&display=swap" rel="stylesheet" />
+
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+
+<!-- ── Animated Background ─────────────────────────────────── -->
+<div class="bg-canvas">
+  <div class="bg-gradient"></div>
+</div>
+
+<!-- ── Push Notification Banner ───────────────────────────── -->
+<div class="notif-banner" id="notifBanner">
+  <div class="notif-icon">🔔</div>
+  <div class="notif-text">
+    <strong>🌸 Notification চালু করুন</strong>
+    <small>Admin এর Reply আসলে তুরন্ত জানুন!</small>
+  </div>
+  <div class="notif-btns">
+    <button class="notif-allow" onclick="allowNotifications()">✅ Allow</button>
+    <button class="notif-deny"  onclick="dismissNotifBanner()">✖ Later</button>
+  </div>
+</div>
+
+<!-- ── Reply Popup ─────────────────────────────────────────── -->
+<div class="overlay" id="replyOverlay">
+  <div class="popup-box">
+    <button class="popup-close" id="closeReplyPopup" aria-label="Close">✕</button>
+    <div class="popup-title">💌 Admin Reply এসেছে!</div>
+    <div class="popup-divider"></div>
+    <div class="popup-meta" id="popupMeta">🕒 Loading...</div>
+    <div class="popup-message" id="popupMessage">Loading reply...</div>
+    <div class="popup-divider"></div>
+    <p style="text-align:center;font-size:0.75rem;color:var(--text-muted);margin-top:8px">
+      📥 পুরো History দেখতে → Menu &gt; Receive History
+    </p>
+  </div>
+</div>
+
+<!-- ── App Container ──────────────────────────────────────── -->
+<div class="container">
+
+  <!-- ── Top Navigation Bar ───────────────────────────────── -->
+  <nav class="top-bar" style="position:relative">
+    <div class="top-bar-logo">
+      💌 <span>Write Your Mind</span>
+    </div>
+    <button class="menu-btn" id="menuBtn" aria-label="Menu">
+      <div class="menu-dot"></div>
+      <div class="menu-dot"></div>
+      <div class="menu-dot"></div>
+    </button>
+    <div class="dropdown-menu" id="dropdownMenu">
+      <a class="menu-item" data-page="home" href="#">
+        <span class="icon">🏠</span> Home
+      </a>
+      <a class="menu-item" data-page="help" href="#">
+        <span class="icon">❓</span> Help
+      </a>
+      <a class="menu-item" data-page="send-history" href="#">
+        <span class="icon">📨</span> Send History
+      </a>
+      <a class="menu-item" data-page="receive-history" href="#">
+        <span class="icon">📥</span> Receive History
+      </a>
+      <a class="menu-item" data-page="settings" href="#">
+        <span class="icon">⚙️</span> Settings
+      </a>
+    </div>
+  </nav>
+
+  <!-- ════════════════════════════════════════════════════════
+       PAGE: HOME
+  ═════════════════════════════════════════════════════════ -->
+  <div id="page-home" class="page active">
+
+    <!-- Hero -->
+    <div class="hero">
+      <span class="hero-icon">💌</span>
+      <h1 class="hero-title">Write Your Mind</h1>
+      <p class="hero-subtitle">Anonymous Love Letter Platform</p>
+      <p class="hero-bangla">আপনার মনের গোপন কথা নিরাপদে পাঠান 🌸</p>
+    </div>
+
+    <!-- Message Form Card -->
+    <div class="glass-card form-section">
+
+      <!-- Captions -->
+      <div class="textarea-captions" style="margin-bottom:16px">
+        <span class="caption-line">💖 না বলা মনের কথা লিখুন...</span>
+        <span class="caption-line">💌 আপনার অনুভূতির চিঠি এখানে লিখুন...</span>
+        <span class="caption-line">🌷 পরিচয় গোপন রেখেও মনের কথা জানাতে পারেন...</span>
+        <span class="caption-line">✨ আপনার মনের গোপন কথাগুলো এখানে লিখুন...</span>
+      </div>
+
+      <form id="msgForm" novalidate>
+        <!-- Name -->
+        <div class="form-group">
+          <label class="form-label" for="inputName"><span>👤</span> Enter Your Name <em style="font-size:.75rem;color:var(--text-muted)">(Optional)</em></label>
+          <input
+            id="inputName" type="text" class="form-input"
+            placeholder="আপনার নাম লিখুন..."
+            data-placeholder="আপনার নাম লিখুন..."
+            data-anon-placeholder="🔒 Hidden"
+            maxlength="60" autocomplete="off" spellcheck="false"
+          />
+        </div>
+
+        <!-- Phone -->
+        <div class="form-group">
+          <label class="form-label" for="inputPhone"><span>📞</span> Enter Phone Number <em style="font-size:.75rem;color:var(--text-muted)">(Optional)</em></label>
+          <input
+            id="inputPhone" type="tel" class="form-input"
+            placeholder="আপনার ফোন নম্বর..."
+            data-placeholder="আপনার ফোন নম্বর..."
+            data-anon-placeholder="🔒 Hidden"
+            maxlength="20" autocomplete="off"
+          />
+        </div>
+
+        <!-- FB ID -->
+        <div class="form-group">
+          <label class="form-label" for="inputFb"><span>🔗</span> Enter FB ID Link <em style="font-size:.75rem;color:var(--text-muted)">(Optional)</em></label>
+          <input
+            id="inputFb" type="url" class="form-input"
+            placeholder="Facebook Profile Link (optional)"
+            data-placeholder="Facebook Profile Link (optional)"
+            data-anon-placeholder="🔒 Hidden"
+            maxlength="150" autocomplete="off"
+          />
+        </div>
+
+        <!-- Message Box -->
+        <div class="form-group">
+          <label class="form-label" for="inputMessage"><span>💬</span> Write Your Mind <span style="color:var(--pink)">*</span></label>
+          <textarea
+            id="inputMessage" class="form-textarea"
+            placeholder="💖 এখানে আপনার মনের কথা লিখুন...&#10;&#10;🌸 পরিচয় গোপন রেখেও পাঠাতে পারেন।&#10;✨ আপনার বার্তা সম্পূর্ণ গোপন থাকবে।"
+            maxlength="1000" required
+          ></textarea>
+          <div class="char-count" id="charCount">0 / 1000</div>
+        </div>
+
+        <!-- Anonymous Checkbox -->
+        <label class="anon-wrap" for="anonCheckbox">
+          <input type="checkbox" id="anonCheckbox" class="anon-checkbox" />
+          <div class="anon-info">
+            <div class="anon-title">🕶️ Use Default Hidden Identity</div>
+            <div class="anon-desc">Tick করলে Name, Phone, FB সব Auto Hidden হয়ে যাবে। আপনার পরিচয় সম্পূর্ণ গোপন থাকবে।</div>
+          </div>
+        </label>
+
+        <!-- Send Button -->
+        <button type="submit" class="send-btn" id="sendBtn">
+          SEND MESSAGE <span class="btn-icon">💌</span>
+        </button>
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      <div class="footer-title">📢 JOIN OUR TELEGRAM &amp; CONTACT ADMIN</div>
+      <div class="footer-links">
+        <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" rel="noopener noreferrer" class="footer-link fb">
+          🔵 Contact Admin (FB)
+        </a>
+        <a href="https://t.me/rksystemall" target="_blank" rel="noopener noreferrer" class="footer-link tg">
+          📨 Join Telegram
+        </a>
+      </div>
+      <div class="footer-copy">💌 Secret Message Box — Secure &amp; Anonymous | Made with ❤️</div>
+    </div>
+
+  </div><!-- /page-home -->
+
+  <!-- ════════════════════════════════════════════════════════
+       PAGE: SEND HISTORY
+  ═════════════════════════════════════════════════════════ -->
+  <div id="page-send-history" class="page">
+    <div class="glass-card">
+      <div class="page-header">
+        <button class="back-btn" data-back aria-label="Back">←</button>
+        <div class="page-title">📨 Send History</div>
+      </div>
+      <div id="sendHistoryList" class="history-list">
+        <div class="empty-state">
+          <span class="empty-icon">📭</span>
+          <p>এখনো কোনো Message পাঠানো হয়নি।</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       PAGE: RECEIVE HISTORY
+  ═════════════════════════════════════════════════════════ -->
+  <div id="page-receive-history" class="page">
+    <div class="glass-card">
+      <div class="page-header">
+        <button class="back-btn" data-back aria-label="Back">←</button>
+        <div class="page-title">📥 Receive History</div>
+      </div>
+      <div id="receiveHistoryList" class="history-list">
+        <div class="empty-state">
+          <span class="empty-icon">📥</span>
+          <p>এখনো কোনো Reply পাওয়া যায়নি।</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       PAGE: HELP
+  ═════════════════════════════════════════════════════════ -->
+  <div id="page-help" class="page">
+    <div class="glass-card">
+      <div class="page-header">
+        <button class="back-btn" data-back aria-label="Back">←</button>
+        <div class="page-title">❓ Help</div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">💌</div>
+        <div>
+          <div class="help-title">Message পাঠাবো কিভাবে?</div>
+          <div class="help-desc">Home পেজে গিয়ে Message Box এ লিখুন এবং "SEND MESSAGE" বাটনে ক্লিক করুন। নাম, ফোন ও FB দেওয়া Optional।</div>
+        </div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">🕶️</div>
+        <div>
+          <div class="help-title">পরিচয় গোপন রাখবো কিভাবে?</div>
+          <div class="help-desc">"Use Default Hidden Identity" Checkbox এ Tick দিন। Name, Phone, FB সব Automatically Hidden হয়ে যাবে।</div>
+        </div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">🔔</div>
+        <div>
+          <div class="help-title">Notification কিভাবে পাবো?</div>
+          <div class="help-desc">Website খুললে Notification Permission এর Popup আসবে। Allow করলে Admin Reply করলে তাৎক্ষণিক নোটিফিকেশন পাবেন।</div>
+        </div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">📥</div>
+        <div>
+          <div class="help-title">Reply কোথায় দেখবো?</div>
+          <div class="help-desc">Reply আসলে একটি সুন্দর Popup দেখাবে। এছাড়া Menu থেকে "Receive History" তে সব Reply দেখতে পাবেন।</div>
+        </div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">🆔</div>
+        <div>
+          <div class="help-title">User ID কি?</div>
+          <div class="help-desc">প্রথমবার Visit করলে একটি 3-Digit Unique ID তৈরি হয়। এটি Browser এ Save থাকে। Admin এই ID দিয়ে আপনাকে Reply পাঠায়।</div>
+        </div>
+      </div>
+
+      <div class="help-item">
+        <div class="help-icon">🔒</div>
+        <div>
+          <div class="help-title">Message কি Secure?</div>
+          <div class="help-desc">হ্যাঁ! সব Message Encrypted API এর মাধ্যমে পাঠানো হয়। কোনো Secret Key বা Token Frontend এ থাকে না।</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════
+       PAGE: SETTINGS
+  ═════════════════════════════════════════════════════════ -->
+  <div id="page-settings" class="page">
+    <div class="glass-card">
+      <div class="page-header">
+        <button class="back-btn" data-back aria-label="Back">←</button>
+        <div class="page-title">⚙️ Settings</div>
+      </div>
+
+      <!-- User ID -->
+      <div class="settings-group">
+        <span class="settings-label">🆔 Your User ID</span>
+        <div class="user-id-display">
+          <div>
+            <div class="user-id-num" id="settingsUserId">···</div>
+            <div class="user-id-label">Permanent Browser ID</div>
+          </div>
+          <span style="font-size:1.5rem">🔐</span>
+        </div>
+      </div>
+
+      <!-- Notification -->
+      <div class="settings-group">
+        <span class="settings-label">🔔 Notifications</span>
+        <div class="settings-item">
+          <div>
+            <div class="settings-item-title">Push Notifications</div>
+            <div class="settings-item-desc">Reply আসলে Notification পান</div>
+          </div>
+          <button class="toggle" id="notifToggle" onclick="toggleNotification(this)"></button>
+        </div>
+      </div>
+
+      <!-- Clear History -->
+      <div class="settings-group">
+        <span class="settings-label">🗑️ Data</span>
+        <div class="settings-item">
+          <div>
+            <div class="settings-item-title">Clear Send History</div>
+            <div class="settings-item-desc">সব Sent Message Delete করুন</div>
+          </div>
+          <button onclick="clearSendHistory()" style="padding:8px 14px;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:20px;color:#ff8888;cursor:pointer;font-size:0.8rem;font-weight:700">Clear</button>
+        </div>
+        <div class="settings-item">
+          <div>
+            <div class="settings-item-title">Clear Receive History</div>
+            <div class="settings-item-desc">সব Received Reply Delete করুন</div>
+          </div>
+          <button onclick="clearReceiveHistory()" style="padding:8px 14px;background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:20px;color:#ff8888;cursor:pointer;font-size:0.8rem;font-weight:700">Clear</button>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div class="settings-group">
+        <span class="settings-label">ℹ️ About</span>
+        <div style="padding:14px 16px;background:var(--glass-bg);border:1px solid var(--glass-border);border-radius:var(--radius-md);font-size:0.82rem;color:var(--text-muted);line-height:1.8">
+          💌 <strong style="color:var(--text-primary)">Secret Message Box</strong><br/>
+          Anonymous Love Letter Platform<br/>
+          Powered by Vercel + Telegram Bot<br/>
+          🔒 Enterprise-Level Secure
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- Toast container -->
+<div id="mainToast" class="toast"></div>
+
+<script src="/js/app.js"></script>
+<script>
+// ── Settings page inline helpers ───────────────────────────
+function toggleNotification(btn) {
+  if (Notification.permission === 'granted') {
+    btn.classList.toggle('on');
+    showToast('🔔 Notification setting updated.', 'info');
+  } else {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') {
+        btn.classList.add('on');
+        showToast('✅ Notifications enabled!', 'success');
+      } else {
+        showToast('❌ Notification permission denied.', 'error');
+      }
+    });
+  }
+}
+
+function clearSendHistory() {
+  if (!confirm('সব Send History delete করবেন?')) return;
+  localStorage.removeItem('smb_send_history');
+  showToast('🗑️ Send History cleared.', 'info');
+}
+function clearReceiveHistory() {
+  if (!confirm('সব Receive History delete করবেন?')) return;
+  localStorage.removeItem('smb_receive_history');
+  showToast('🗑️ Receive History cleared.', 'info');
+}
+
+// Init notification toggle state
+document.addEventListener('DOMContentLoaded', () => {
+  const t = document.getElementById('notifToggle');
+  if (t && Notification.permission === 'granted') t.classList.add('on');
+});
+</script>
+</body>
+</html>
