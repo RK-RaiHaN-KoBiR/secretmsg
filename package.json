@@ -1,0 +1,15 @@
+{
+  "name": "secretmsg",
+  "version": "1.0.0",
+  "description": "গোপন চিঠির বাক্স - Secret Message Box",
+  "main": "api/bot.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "setup-webhook": "node scripts/setup.js"
+  },
+  "keywords": ["secret", "message", "telegram", "bot"],
+  "author": "RK-RaiHaN-KoBiR",
+  "license": "MIT"
+}
