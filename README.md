@@ -7,28 +7,6 @@
 
 ## 📁 Folder Structure
 
-```
-secretmsg/
-├── public/
-│   ├── index.html      ← Main website
-│   ├── style.css       ← Styling
-│   ├── app.js          ← Frontend logic
-│   ├── sw.js           ← Service Worker (Push Notifications)
-│   └── manifest.json   ← PWA Manifest
-├── api/
-│   ├── send.js         ← Message send endpoint
-│   ├── replies.js      ← Get user replies
-│   ├── mark-seen.js    ← Mark reply as seen
-│   ├── new-user.js     ← New user alert
-│   ├── captions.js     ← Get admin captions
-│   ├── caption-notify.js ← Caption notification
-│   └── subscribe.js    ← Notification subscribe
-├── bot/
-│   └── bot.js          ← Telegram Bot (Admin only)
-├── vercel.json         ← Vercel config
-├── package.json
-└── README.md
-```
 
 ---
 
@@ -72,14 +50,6 @@ node bot/bot.js
 
 ---
 
-## ⚙️ Configuration (vercel.json এ আছে)
-
-```
-BOT_TOKEN = 8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA
-ADMIN_ID = 6048050987
-JSONBIN_BIN_ID = 6a048364250b1311c344cc10
-JSONBIN_MASTER_KEY = $2a$10$dFJuDsfbDqqnkKBPh2bGMuHea6RJjPSU2bv67bkIM9GaJkypisWdW
-```
 
 ---
 
