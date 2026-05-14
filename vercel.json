@@ -1,12 +1,18 @@
 {
   "version": 2,
-  "functions": {
-    "api/webhook.js": { "memory": 256, "maxDuration": 10 },
-    "api/bot.js": { "memory": 256, "maxDuration": 10 }
-  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" }
+  ],
   "routes": [
-    { "src": "/api/webhook", "dest": "/api/webhook.js" },
-    { "src": "/api/bot", "dest": "/api/bot.js" },
+    { "src": "/api/(.*)", "dest": "/api/$1" },
     { "src": "/(.*)", "dest": "/public/$1" }
-  ]
+  ],
+  "env": {
+    "BOT_TOKEN": "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA",
+    "ADMIN_ID": "6048050987",
+    "JSONBIN_BIN_ID": "6a048364250b1311c344cc10",
+    "JSONBIN_MASTER_KEY": "$2a$10$dFJuDsfbDqqnkKBPh2bGMuHea6RJjPSU2bv67bkIM9GaJkypisWdW",
+    "JSONBIN_ACCESS_KEY": "$2a$10$YzxVA/b2UjEZCT9QRI5j0.zgsb1l4ZPRMA4PPFb6Q7QvJG7joNRRy",
+    "SITE_URL": "https://cithipathao.vercel.app"
+  }
 }

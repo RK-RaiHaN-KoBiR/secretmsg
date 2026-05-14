@@ -1,85 +1,113 @@
-# 💌 গোপন চিঠির বাক্স | Secret Message Box
+# 💌 চিঠি পাঠাও - Secret Message Box
 
-> সরাসরি বলতে না পারা আপনার মনের কথা গুলো এখানে বলতে পারেন পরিচয় গোপন রেখে 🔐
+**Site:** https://cithipathao.vercel.app  
+**GitHub:** https://github.com/RK-RaiHaN-KoBiR/secretmsg/
 
-## 📁 Project Structure
+---
+
+## 📁 Folder Structure
 
 ```
 secretmsg/
 ├── public/
 │   ├── index.html      ← Main website
-│   ├── style.css       ← All styles
+│   ├── style.css       ← Styling
 │   ├── app.js          ← Frontend logic
-│   └── sw.js           ← Service Worker (notifications)
+│   ├── sw.js           ← Service Worker (Push Notifications)
+│   └── manifest.json   ← PWA Manifest
 ├── api/
-│   ├── webhook.js      ← Message handler (website → bot)
-│   └── bot.js          ← Telegram bot + reply checker
-├── scripts/
-│   └── setup.js        ← Webhook setup script
+│   ├── send.js         ← Message send endpoint
+│   ├── replies.js      ← Get user replies
+│   ├── mark-seen.js    ← Mark reply as seen
+│   ├── new-user.js     ← New user alert
+│   ├── captions.js     ← Get admin captions
+│   ├── caption-notify.js ← Caption notification
+│   └── subscribe.js    ← Notification subscribe
+├── bot/
+│   └── bot.js          ← Telegram Bot (Admin only)
 ├── vercel.json         ← Vercel config
-└── package.json
+├── package.json
+└── README.md
 ```
 
-## 🚀 Deploy Steps (Android থেকেও করা যাবে)
+---
 
-### Step 1: GitHub এ Upload করুন
-1. GitHub এ যান: https://github.com/RK-RaiHaN-KoBiR/secretmsg/
-2. সব ফাইল গুলো upload করুন (folder structure বজায় রাখুন)
+## 🚀 Deploy to Vercel (GitHub থেকে)
 
-### Step 2: Vercel এ Deploy করুন
-1. https://vercel.com এ যান
+### Step 1: GitHub এ Upload
+সব ফাইল GitHub এ push করুন:
+```
+https://github.com/RK-RaiHaN-KoBiR/secretmsg/
+```
+
+### Step 2: Vercel এ Deploy
+1. [vercel.com](https://vercel.com) এ যান
 2. GitHub দিয়ে login করুন
 3. "New Project" → আপনার repo select করুন
 4. Deploy করুন
 
-### Step 3: Environment Variables সেট করুন
-Vercel Dashboard → Project Settings → Environment Variables এ এগুলো add করুন:
+---
 
-```
-BOT_TOKEN = আপনার আসল bot token
-ADMIN_CHAT_ID = আপনার Telegram user ID (6048050987)
-JSONBIN_BIN_ID = আপনার JSONBin bin ID
-JSONBIN_MASTER_KEY = আপনার JSONBin master key
-JSONBIN_ACCESS_KEY = আপনার JSONBin access key
-SITE_URL = https://cithipathao.vercel.app
+## 🤖 Bot চালু করার উপায় (Optional - Local বা Server)
+
+Bot টি locally বা যেকোনো server এ চালাতে পারবেন:
+
+```bash
+npm install
+node bot/bot.js
 ```
 
-### Step 4: Telegram Webhook Register করুন
-Browser এ এই URL এ যান (একবারই করতে হবে):
-```
-https://api.telegram.org/bot{YOUR_BOT_TOKEN}/setWebhook?url=https://cithipathao.vercel.app/api/bot
+> **Note:** Bot টি Vercel এ চলবে না (serverless)। Bot চালাতে হলে আলাদা একটা Android device বা server লাগবে।
+
+### Android এ Bot চালানো:
+1. **Termux** install করুন (Play Store)
+2. Termux খুলুন:
+```bash
+pkg install nodejs git
+git clone https://github.com/RK-RaiHaN-KoBiR/secretmsg
+cd secretmsg
+npm install
+node bot/bot.js
 ```
 
 ---
 
-## 🤖 Bot Commands
+## ⚙️ Configuration (vercel.json এ আছে)
+
+```
+BOT_TOKEN = 8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA
+ADMIN_ID = 6048050987
+JSONBIN_BIN_ID = 6a048364250b1311c344cc10
+JSONBIN_MASTER_KEY = $2a$10$dFJuDsfbDqqnkKBPh2bGMuHea6RJjPSU2bv67bkIM9GaJkypisWdW
+```
+
+---
+
+## 🤖 Bot Commands (Admin Only)
 
 | Command | কাজ |
 |---------|-----|
-| `/start` | Bot শুরু |
-| `/help` | সব command দেখুন |
-| `/users` | সব user list |
-| `/send {userid} {msg}` | নির্দিষ্ট user কে reply |
-| `/sendall {msg}` | সবাইকে broadcast |
-
-### Keyboard Buttons:
-- ❓ Help
-- 📤 Send History  
-- 📥 Received History
-- 👥 Show All Users
-- 📢 Send To All
+| `/start` | Bot শুরু করুন |
+| `/send [userid] [msg]` | User কে message পাঠান |
+| `/users` | সকল user দেখুন |
+| `/broadcast` | সবাইকে message পাঠান |
+| `/caption` | Caption manage করুন |
+| `/replyhistory` | Reply history |
+| `/receivedhistory` | সব received message |
+| `/help` | Help দেখুন |
 
 ---
 
-## 🔗 Links
-- 📢 Telegram: https://t.me/rksystemall
-- 💬 Admin: https://m.me/ToR.PiccHi.JaMai.TaH.X
-- 🌐 Site: https://cithipathao.vercel.app
+## 📌 Features
 
----
-
-## ⚠️ Important Notes
-- Bot শুধু Admin (ADMIN_CHAT_ID) ব্যবহার করতে পারবে
-- সব user তথ্য আলাদা আলাদা cookies/localStorage এ save হয়
-- কেউ অন্যের তথ্য দেখতে পারবে না
-- Admin শুধু bot থেকে সব তথ্য দেখতে পারবে
+✅ Secret anonymous messaging  
+✅ Telegram bot integration  
+✅ User ID system (4-digit permanent)  
+✅ Push Notifications  
+✅ Send/Receive History  
+✅ Caption collection  
+✅ Device info tracking  
+✅ Admin broadcast  
+✅ Profile management  
+✅ PWA support  
+✅ Cookie-based permanent storage  

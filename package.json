@@ -1,15 +1,16 @@
 {
-  "name": "secretmsg",
+  "name": "secretmsg-cithipathao",
   "version": "1.0.0",
-  "description": "গোপন চিঠির বাক্স - Secret Message Box",
-  "main": "api/bot.js",
+  "description": "চিঠি পাঠাও - Secret Message Box",
+  "private": true,
+  "scripts": {
+    "bot": "node bot/bot.js",
+    "start": "node bot/bot.js"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
   "engines": {
     "node": ">=18"
-  },
-  "scripts": {
-    "setup-webhook": "node scripts/setup.js"
-  },
-  "keywords": ["secret", "message", "telegram", "bot"],
-  "author": "RK-RaiHaN-KoBiR",
-  "license": "MIT"
+  }
 }
