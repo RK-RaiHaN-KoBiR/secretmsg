@@ -1,0 +1,11 @@
+{
+  "nextUserId": 1001,
+  "nextMsgId": 1,
+  "nextCaptionId": 1,
+  "nextCaptionNum": 1,
+  "users": {},
+  "sentMessages": [],
+  "receivedMessages": [],
+  "captions": [],
+  "broadcasts": []
+}
