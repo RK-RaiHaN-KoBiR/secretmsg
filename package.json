@@ -1,16 +1,20 @@
 {
-  "name": "secretmsg-cithipathao",
+  "name": "chithi-pathao-secret-message",
   "version": "1.0.0",
-  "description": "চিঠি পাঠাও - Secret Message Box",
-  "private": true,
+  "description": "Anonymous Secret Message Platform - চিঠি পাঠাও",
+  "main": "bot/bot.js",
   "scripts": {
-    "bot": "node bot/bot.js",
-    "start": "node bot/bot.js"
+    "start": "node bot/bot.js",
+    "dev": "node bot/bot.js",
+    "setup-webhook": "node bot/setWebhook.js"
   },
   "dependencies": {
     "node-fetch": "^3.3.2"
   },
   "engines": {
-    "node": ">=18"
-  }
+    "node": ">=18.x"
+  },
+  "keywords": ["telegram-bot", "anonymous-message", "secret-message", "vercel"],
+  "author": "RK-RaiHaN-KoBiR",
+  "license": "MIT"
 }

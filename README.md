@@ -1,83 +1,126 @@
-# 💌 চিঠি পাঠাও - Secret Message Box
+# 💌 চিঠি পাঠাও — Secret Message Box
 
-**Site:** https://cithipathao.vercel.app  
-**GitHub:** https://github.com/RK-RaiHaN-KoBiR/secretmsg/
+> Anonymous Secret Messaging Platform with Telegram Bot Admin Panel
 
----
-
-## 📁 Folder Structure
-
+**Live Site:** [cithipathao.vercel.app](https://cithipathao.vercel.app)  
+**GitHub:** [RK-RaiHaN-KoBiR/secretmsg](https://github.com/RK-RaiHaN-KoBiR/secretmsg)
 
 ---
 
-## 🚀 Deploy to Vercel (GitHub থেকে)
+## 📂 Folder Structure
 
-### Step 1: GitHub এ Upload
-সব ফাইল GitHub এ push করুন:
 ```
-https://github.com/RK-RaiHaN-KoBiR/secretmsg/
-```
-
-### Step 2: Vercel এ Deploy
-1. [vercel.com](https://vercel.com) এ যান
-2. GitHub দিয়ে login করুন
-3. "New Project" → আপনার repo select করুন
-4. Deploy করুন
-
----
-
-## 🤖 Bot চালু করার উপায় (Optional - Local বা Server)
-
-Bot টি locally বা যেকোনো server এ চালাতে পারবেন:
-
-```bash
-npm install
-node bot/bot.js
-```
-
-> **Note:** Bot টি Vercel এ চলবে না (serverless)। Bot চালাতে হলে আলাদা একটা Android device বা server লাগবে।
-
-### Android এ Bot চালানো:
-1. **Termux** install করুন (Play Store)
-2. Termux খুলুন:
-```bash
-pkg install nodejs git
-git clone https://github.com/RK-RaiHaN-KoBiR/secretmsg
-cd secretmsg
-npm install
-node bot/bot.js
+secretmsg/
+├── public/
+│   ├── index.html       ← Main Website
+│   ├── style.css        ← Full CSS (Glassmorphism + Neon)
+│   ├── app.js           ← Frontend JavaScript
+│   ├── sw.js            ← Service Worker (Push Notifications)
+│   └── manifest.json    ← PWA Manifest
+│
+├── api/
+│   ├── database.js      ← JSONBin DB Helper
+│   ├── user.js          ← User Register / Profile API
+│   ├── send.js          ← Send & Receive Message API
+│   ├── caption.js       ← Caption Management API
+│   ├── broadcast.js     ← Broadcast API
+│   └── webhook.js       ← Telegram Webhook Endpoint
+│
+├── bot/
+│   ├── bot.js           ← Full Telegram Bot Logic
+│   └── setWebhook.js    ← Webhook Setup Script
+│
+├── database/
+│   └── db.json          ← Default DB Structure (JSONBin এ যাবে)
+│
+├── package.json
+├── vercel.json
+├── .env.example
+└── README.md
 ```
 
 ---
 
+## 🚀 Deploy করার নিয়ম (Android Mobile দিয়ে)
+
+### Step 1 — GitHub এ Upload করুন
+
+1. GitHub এ login করুন → New Repository → নাম: `secretmsg`
+2. সব ফাইল upload করুন (folder structure ঠিক রাখুন)
+
+### Step 2 — JSONBin Setup
+
+1. [jsonbin.io](https://jsonbin.io) তে একাউন্ট খুলুন
+2. New Bin তৈরি করুন → `database/db.json` এর content paste করুন
+3. Bin ID, Master Key, Access Key নোট করুন
+
+### Step 3 — Vercel Deploy
+
+1. [vercel.com](https://vercel.com) এ GitHub দিয়ে login করুন
+2. "New Project" → আপনার `secretmsg` repository select করুন
+3. **Environment Variables** যোগ করুন:
+
+| Key | Value |
+|-----|-------|
+| `BOT_TOKEN` | আপনার Telegram Bot Token |
+| `ADMIN_ID` | আপনার Telegram User ID |
+| `JSONBIN_BIN_ID` | আপনার JSONBin Bin ID |
+| `JSONBIN_MASTER_KEY` | আপনার JSONBin Master Key |
+| `JSONBIN_ACCESS_KEY` | আপনার JSONBin Access Key |
+| `SITE_URL` | `https://আপনার-প্রজেক্ট.vercel.app` |
+
+4. Deploy করুন ✅
+
+### Step 4 — Webhook Set করুন
+
+Deploy হওয়ার পর Browser এ এই URL এ যান:
+```
+https://api.telegram.org/botYOUR_BOT_TOKEN/setWebhook?url=https://আপনার-সাইট.vercel.app/api/webhook
+```
 
 ---
 
-## 🤖 Bot Commands (Admin Only)
+## 🤖 Bot Features
 
 | Command | কাজ |
 |---------|-----|
-| `/start` | Bot শুরু করুন |
-| `/send [userid] [msg]` | User কে message পাঠান |
-| `/users` | সকল user দেখুন |
-| `/broadcast` | সবাইকে message পাঠান |
-| `/caption` | Caption manage করুন |
-| `/replyhistory` | Reply history |
-| `/receivedhistory` | সব received message |
-| `/help` | Help দেখুন |
+| `/start` | Welcome Menu |
+| `/send 1001 Hello` | User কে Message পাঠান |
+| `/received` | সব Received Messages |
+| `/replyhistory` | সব Sent Replies |
+| `/users` | সব Registered Users |
+| `/broadcast` | সকলকে Message পাঠান |
+| `/caption` | Caption Manage করুন |
+| `/ban 1001` | User Ban করুন |
+| `/unban 1001` | User Unban করুন |
+| `/info 1001` | User Info দেখুন |
+| `/status` | Bot Status |
+| `/help` | Help Menu |
 
 ---
 
-## 📌 Features
+## 🌐 Website Features
 
-✅ Secret anonymous messaging  
-✅ Telegram bot integration  
-✅ User ID system (4-digit permanent)  
-✅ Push Notifications  
-✅ Send/Receive History  
-✅ Caption collection  
-✅ Device info tracking  
-✅ Admin broadcast  
-✅ Profile management  
-✅ PWA support  
-✅ Cookie-based permanent storage  
+- ✅ Anonymous / Named Message Send
+- ✅ Auto User ID Generation (1001–9999)
+- ✅ Send History & Received History
+- ✅ Caption Box (Admin + User)
+- ✅ My Profile
+- ✅ Push Notifications
+- ✅ Glassmorphism + Neon UI
+- ✅ Mobile Responsive
+- ✅ PWA Support
+- ✅ Ban System
+
+---
+
+## 🔒 Security
+
+- User data isolated (প্রতিটি user শুধু নিজেরটা দেখে)
+- Admin only bot access
+- No sensitive data in frontend
+- All logic server-side (Vercel Serverless)
+
+---
+
+**Made with 💜 by RK System**
