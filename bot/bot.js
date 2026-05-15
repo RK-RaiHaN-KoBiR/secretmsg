@@ -1,611 +1,375 @@
-// bot/bot.js - Telegram Bot for Secret Message Box Admin
-// Run: node bot/bot.js
-// Install: npm install node-fetch
+/* ===== bot/bot.js — Full Telegram Bot ===== */
+const { readDB, writeDB, getBDTime } = require('../api/database');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID = process.env.ADMIN_ID || '6048050987';
-const JSONBIN_BIN_ID = process.env.JSONBIN_BIN_ID || '6a048364250b1311c344cc10';
-const JSONBIN_MASTER_KEY = process.env.JSONBIN_MASTER_KEY || '$2a$10$dFJuDsfbDqqnkKBPh2bGMuHea6RJjPSU2bv67bkIM9GaJkypisWdW';
-const SITE_URL = process.env.SITE_URL || 'https://cithipathao.vercel.app';
+const ADMIN_ID  = String(process.env.ADMIN_ID || '6048050987');
+const TG_API    = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const SITE_URL  = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : (process.env.SITE_URL || 'https://cithipathao.vercel.app');
 
-const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+// ─── pending state (in-memory, per cold start) ────
+const pendingState = {};
 
-// State for pending operations
-const pendingReplies = {}; // { chatId: { userId, step } }
-const pendingBroadcast = {}; // { chatId: true }
-const pendingCaption = {}; // { chatId: { action, captionId } }
-const pendingSend = {}; // { chatId: { step, userId, message } }
-
-let offset = 0;
-
-// ===== HELPERS =====
-async function tgRequest(method, data = {}) {
+// ─── SEND TG ─────────────────────────────────────
+async function sendMsg(chatId, text, extra={}) {
+  const body = { chat_id: chatId, text, parse_mode: 'HTML', ...extra };
   try {
-    const r = await fetch(`${TG_API}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
-    return r.json();
-  } catch(e) {
-    console.error(`TG Error [${method}]:`, e.message);
-    return null;
-  }
+    const r = await fetch(`${TG_API}/sendMessage`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    return await r.json();
+  } catch(e) { return null; }
 }
 
-async function sendMsg(chatId, text, extra = {}) {
-  return tgRequest('sendMessage', {
-    chat_id: chatId,
-    text,
-    parse_mode: 'HTML',
-    ...extra
-  });
-}
-
-function isAdmin(chatId) {
-  return String(chatId) === String(ADMIN_ID);
-}
-
-// ===== DATABASE HELPERS =====
-async function getDB() {
+async function answerCallback(callbackQueryId, text='') {
   try {
-    const r = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-      headers: { 'X-Master-Key': JSONBIN_MASTER_KEY }
-    });
-    const data = await r.json();
-    return data.record || { users: {}, messages: [], replies: [], adminCaptions: [] };
-  } catch(e) {
-    return { users: {}, messages: [], replies: [], adminCaptions: [] };
-  }
+    await fetch(`${TG_API}/answerCallbackQuery`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ callback_query_id:callbackQueryId, text }) });
+  } catch(e) {}
 }
 
-async function saveDB(db) {
-  try {
-    await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_MASTER_KEY
-      },
-      body: JSON.stringify(db)
-    });
-    return true;
-  } catch(e) {
-    return false;
-  }
-}
-
-// ===== KEYBOARD =====
-const adminKeyboard = {
+// ─── KEYBOARDS ────────────────────────────────────
+const MAIN_KEYBOARD = {
   keyboard: [
-    ['💌 Send', '📋 Show All Users'],
-    ['📤 Reply History', '📥 Received History'],
-    ['📢 Broadcast', '✍️ Caption Box'],
-    ['❓ Help']
+    [{ text: '📨 Send Message' }, { text: '📥 Received History' }],
+    [{ text: '📤 Reply History' }, { text: '👥 Show All User' }],
+    [{ text: '📢 Broadcast' }, { text: '📝 Caption BOX' }],
+    [{ text: '🆘 Help' }]
   ],
   resize_keyboard: true,
   persistent: true
 };
 
-// ===== SET COMMANDS =====
-async function setCommands() {
-  await tgRequest('setMyCommands', {
-    commands: [
-      { command: 'start', description: '🚀 Bot শুরু করুন' },
-      { command: 'send', description: '💌 User কে message পাঠান' },
-      { command: 'users', description: '👥 সকল User দেখুন' },
-      { command: 'broadcast', description: '📢 সবাইকে message পাঠান' },
-      { command: 'caption', description: '✍️ Caption manage করুন' },
-      { command: 'replyhistory', description: '📤 Reply History' },
-      { command: 'receivedhistory', description: '📥 Received Messages' },
-      { command: 'help', description: '❓ Help দেখুন' }
-    ]
-  });
-}
+// ─── MAIN BOT HANDLER ─────────────────────────────
+module.exports = async function botHandler(req, res) {
+  if (req.method !== 'POST') return res.status(200).end();
 
-// ===== HANDLE COMMANDS =====
-async function handleCommand(chatId, cmd, args) {
-  if (!isAdmin(chatId)) {
-    return sendMsg(chatId, '❌ আপনি admin নন! এই bot শুধু admin ব্যবহার করতে পারবেন।');
-  }
+  const update = req.body;
+  if (!update) return res.status(200).end();
 
-  const db = await getDB();
+  try {
+    if (update.callback_query) await handleCallback(update.callback_query);
+    else if (update.message)   await handleMessage(update.message);
+  } catch(e) { console.error('Bot error:', e); }
 
-  switch(cmd) {
-    case '/start':
-      return sendMsg(chatId, `
-🌟 <b>Welcome Back To চিঠি পাঠাও!</b> 🌟
+  return res.status(200).json({ ok: true });
+};
 
-🌐 <b>Site:</b> ${SITE_URL}
-👤 <b>Admin ID:</b> <code>${ADMIN_ID}</code>
+// ─── CALLBACK HANDLER ─────────────────────────────
+async function handleCallback(cq) {
+  const chatId = String(cq.from.id);
+  const data   = cq.data || '';
+  await answerCallback(cq.id);
 
-📋 <b>All Commands:</b>
-/send [userid] [message] - User কে message পাঠান
-/users - সকল user দেখুন
-/broadcast - সবাইকে broadcast করুন
-/caption - Caption manage করুন
-/replyhistory - Reply history দেখুন
-/receivedhistory - সব received message দেখুন
-/help - Help দেখুন
-
-⌨️ নিচের keyboard থেকেও সব কাজ করতে পারবেন।
-      `.trim(), { reply_markup: adminKeyboard });
-
-    case '/send':
-      if (args.length >= 2) {
-        const userId = args[0];
-        const message = args.slice(1).join(' ');
-        await sendReplyToUser(chatId, userId, message, db);
-      } else {
-        pendingSend[chatId] = { step: 'userId' };
-        return sendMsg(chatId, '🆔 User ID লিখুন:', {
-          reply_markup: { force_reply: true }
-        });
-      }
-      break;
-
-    case '/users':
-      return showAllUsers(chatId, db);
-
-    case '/broadcast':
-      pendingBroadcast[chatId] = true;
-      return sendMsg(chatId, '📢 Broadcast message লিখুন (সবার কাছে যাবে):', {
-        reply_markup: { force_reply: true }
-      });
-
-    case '/caption':
-      return showCaptionMenu(chatId, db);
-
-    case '/replyhistory':
-      return showReplyHistory(chatId, db);
-
-    case '/receivedhistory':
-      return showReceivedHistory(chatId, db);
-
-    case '/help':
-      return showHelp(chatId);
-
-    default:
-      return sendMsg(chatId, '❓ Unknown command। /help দেখুন।', { reply_markup: adminKeyboard });
-  }
-}
-
-// ===== SHOW ALL USERS =====
-async function showAllUsers(chatId, db) {
-  const users = db.users || {};
-  const userIds = Object.keys(users);
-
-  if (!userIds.length) return sendMsg(chatId, '👥 কোনো user নেই।');
-
-  let text = `👥 <b>All Users (${userIds.length})</b>\n\n`;
-  const buttons = [];
-
-  userIds.slice(0, 30).forEach(uid => {
-    const u = users[uid];
-    const lastActive = u.lastActive || 'N/A';
-    text += `🆔 <code>${uid}</code> | 📅 ${lastActive}\n`;
-    buttons.push([{ text: `🆔 ${uid}`, callback_data: `user_info_${uid}` }]);
-  });
-
-  return sendMsg(chatId, text, {
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-// ===== USER INFO =====
-async function showUserInfo(chatId, userId, db) {
-  const u = (db.users || {})[userId];
-  if (!u) return sendMsg(chatId, `❌ User ${userId} পাওয়া যায়নি।`);
-
-  const di = u.deviceInfo || {};
-  const userMsgs = (db.messages || []).filter(m => m.userId === userId);
-  const userReplies = (db.replies || []).filter(r => r.userId === userId);
-
-  const text = `
-👤 <b>User Information</b>
-
-🆔 <b>User ID:</b> <code>${userId}</code>
-📅 <b>Join Time:</b> ${u.joinTime || 'N/A'}
-📅 <b>Last Active:</b> ${u.lastActive || 'N/A'}
-👤 <b>Name:</b> ${u.name || 'N/A'}
-📱 <b>Phone:</b> ${u.phone || 'N/A'}
-🔗 <b>FB:</b> ${u.fb || 'N/A'}
-
-📱 <b>Device Model:</b> ${di.deviceModel || 'Unknown'}
-🔋 <b>Charging:</b> ${di.charging || 'Unknown'}
-📶 <b>Network:</b> ${di.network || 'Unknown'}
-🌍 <b>IP:</b> ${di.ip || 'N/A'}
-🏙️ <b>Country:</b> ${di.country || 'N/A'}
-🏠 <b>Division:</b> ${di.region || 'N/A'}
-📍 <b>Zilla:</b> N/A
-🏡 <b>City/Village:</b> ${di.city || 'N/A'}
-📡 <b>ISP:</b> ${di.isp || 'N/A'}
-📱 <b>Platform:</b> ${di.platform || 'Unknown'}
-💾 <b>RAM:</b> ${di.ram || 'Unknown'}
-🧠 <b>User Agent:</b> ${(di.userAgent || '').substring(0, 150)}
-
-📤 <b>Total Messages Sent:</b> ${userMsgs.length}
-📥 <b>Total Replies Received:</b> ${userReplies.length}
-🔔 <b>Notifications:</b> ${u.notifAllowed ? '✅ Allowed' : '❌ Not allowed'}
-  `.trim();
-
-  return sendMsg(chatId, text, {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: '💌 Send Reply', callback_data: `reply_${userId}` }],
-        [{ text: '📋 All Messages', callback_data: `user_msgs_${userId}` }],
-        [{ text: '🔙 Back to Users', callback_data: 'show_users' }]
-      ]
-    }
-  });
-}
-
-// ===== REPLY TO USER =====
-async function sendReplyToUser(chatId, userId, message, db) {
-  const replyId = Date.now().toString();
-  const time = new Date().toLocaleString('bn-BD');
-
-  if (!db.replies) db.replies = [];
-  db.replies.push({
-    id: replyId,
-    userId,
-    message,
-    sentTime: time,
-    seenByUser: false
-  });
-
-  await saveDB(db);
-
-  await sendMsg(chatId, `
-✅ <b>Reply Sent!</b>
-
-🆔 <b>To User ID:</b> <code>${userId}</code>
-📅 <b>Time:</b> ${time}
-💬 <b>Message:</b> ${message}
-
-⏳ Waiting for user to see your message...
-  `.trim());
-}
-
-// ===== BROADCAST =====
-async function sendBroadcast(chatId, message, db) {
-  const users = db.users || {};
-  const userIds = Object.keys(users);
-
-  if (!userIds.length) return sendMsg(chatId, '❌ কোনো user নেই।');
-
-  const replyId = Date.now().toString();
-  const time = new Date().toLocaleString('bn-BD');
-
-  if (!db.replies) db.replies = [];
-  if (!db.broadcasts) db.broadcasts = [];
-
-  db.broadcasts.push({ id: replyId, message, time, totalUsers: userIds.length });
-
-  userIds.forEach(uid => {
-    db.replies.push({
-      id: `${replyId}_${uid}`,
-      userId: uid,
-      message: `📢 Admin Broadcast:\n\n${message}`,
-      sentTime: time,
-      seenByUser: false,
-      isBroadcast: true
-    });
-  });
-
-  await saveDB(db);
-
-  await sendMsg(chatId, `
-📢 <b>Broadcast Successfully Sent!</b>
-
-📅 <b>Time:</b> ${time}
-👥 <b>Total Users:</b> ${userIds.length}
-💬 <b>Message:</b> ${message}
-  `.trim(), { reply_markup: adminKeyboard });
-}
-
-// ===== CAPTION MENU =====
-async function showCaptionMenu(chatId, db) {
-  const caps = db.adminCaptions || [];
-
-  let text = `✍️ <b>Caption Management</b>\n\nTotal: ${caps.length} captions\n\n`;
-
-  const buttons = caps.slice(0, 20).map((cap, i) => {
-    const preview = cap.text.substring(0, 30).replace(/\n/g, ' ');
-    return [
-      { text: `📝 ${preview}...`, callback_data: `cap_view_${i}` },
-      { text: '✏️', callback_data: `cap_edit_${i}` },
-      { text: '🗑️', callback_data: `cap_del_${i}` }
-    ];
-  });
-
-  buttons.push([{ text: '➕ New Caption Add করুন', callback_data: 'cap_add' }]);
-
-  return sendMsg(chatId, text || '✍️ <b>Caption Management</b>\n\nকোনো caption নেই।', {
-    reply_markup: { inline_keyboard: buttons }
-  });
-}
-
-// ===== REPLY HISTORY =====
-async function showReplyHistory(chatId, db) {
-  const replies = (db.replies || []).slice(-20).reverse();
-  if (!replies.length) return sendMsg(chatId, '📤 কোনো reply নেই।');
-
-  let text = '📤 <b>Reply History (Last 20)</b>\n\n';
-  replies.forEach((r, i) => {
-    text += `${i + 1}. 🆔 ${r.userId} | 📅 ${r.sentTime}\n💬 ${r.message.substring(0, 50)}...\n\n`;
-  });
-
-  return sendMsg(chatId, text);
-}
-
-// ===== RECEIVED HISTORY =====
-async function showReceivedHistory(chatId, db) {
-  const msgs = (db.messages || []).slice(-20).reverse();
-  if (!msgs.length) return sendMsg(chatId, '📥 কোনো message নেই।');
-
-  let text = '📥 <b>Received Messages (Last 20)</b>\n\n';
-  msgs.forEach((m, i) => {
-    text += `${i + 1}. 🆔 ${m.userId} | 📅 ${m.time}\n💬 ${(m.message || '').substring(0, 50)}...\n\n`;
-  });
-
-  return sendMsg(chatId, text);
-}
-
-// ===== HELP =====
-async function showHelp(chatId) {
-  return sendMsg(chatId, `
-❓ <b>Admin Help — চিঠি পাঠাও Bot</b>
-
-📋 <b>Commands:</b>
-/start - Bot শুরু করুন ও সব command দেখুন
-/send [userid] [msg] - User কে direct message পাঠান
-/users - সকল registered user দেখুন
-/broadcast - সকল user কে একসাথে message পাঠান
-/caption - Caption add, edit, delete করুন
-/replyhistory - আপনার পাঠানো reply দেখুন
-/receivedhistory - সকল received message দেখুন
-/help - এই help message
-
-⌨️ <b>Keyboard Buttons:</b>
-উপরের keyboard থেকেও সব কাজ করতে পারবেন।
-
-💌 <b>Reply করার উপায়:</b>
-1. /send userid message
-2. Message এর নিচে "💌 Send Reply" button এ click করুন
-
-🌐 <b>Site:</b> ${SITE_URL}
-  `.trim(), { reply_markup: adminKeyboard });
-}
-
-// ===== CALLBACK HANDLER =====
-async function handleCallback(query) {
-  const chatId = query.message.chat.id;
-  const msgId = query.message.message_id;
-  const data = query.data;
-
-  if (!isAdmin(chatId)) {
-    return tgRequest('answerCallbackQuery', { callback_query_id: query.id, text: '❌ Admin only!' });
-  }
-
-  await tgRequest('answerCallbackQuery', { callback_query_id: query.id });
-
-  const db = await getDB();
+  if (!isAdmin(chatId)) { await sendMsg(chatId, '❌ Access Denied'); return; }
 
   if (data.startsWith('reply_')) {
-    const userId = data.replace('reply_', '');
-    pendingReplies[chatId] = { userId };
-    return sendMsg(chatId, `💌 User <code>${userId}</code> কে reply লিখুন:`, {
-      reply_markup: { force_reply: true }
-    });
+    const targetUid = data.replace('reply_', '');
+    pendingState[chatId] = { action: 'replyToUser', targetUid };
+    await sendMsg(chatId, `✉️ <b>Reply To User:</b> <code>${targetUid}</code>\n\nএখন আপনার Reply Message লিখুন:`, { reply_markup: { force_reply: true } });
   }
 
-  if (data.startsWith('user_info_')) {
-    const userId = data.replace('user_info_', '');
-    return showUserInfo(chatId, userId, db);
+  if (data.startsWith('ban_')) {
+    const uid = data.replace('ban_', '');
+    await banUser(chatId, uid, true);
   }
-
-  if (data.startsWith('user_msgs_')) {
-    const userId = data.replace('user_msgs_', '');
-    const msgs = (db.messages || []).filter(m => m.userId === userId).slice(-10).reverse();
-    let text = `📋 <b>User ${userId} - All Messages (Last 10)</b>\n\n`;
-    if (!msgs.length) text += 'কোনো message নেই।';
-    msgs.forEach((m, i) => {
-      text += `${i + 1}. 📅 ${m.time}\n💬 ${m.message}\n\n`;
-    });
-    return sendMsg(chatId, text, {
-      reply_markup: {
-        inline_keyboard: [[{ text: '🔙 Back', callback_data: `user_info_${userId}` }]]
-      }
-    });
+  if (data.startsWith('unban_')) {
+    const uid = data.replace('unban_', '');
+    await banUser(chatId, uid, false);
   }
-
-  if (data === 'show_users') return showAllUsers(chatId, db);
-
-  if (data === 'cap_add') {
-    pendingCaption[chatId] = { action: 'add' };
-    return sendMsg(chatId, '✍️ নতুন Caption লিখুন:', { reply_markup: { force_reply: true } });
+  if (data.startsWith('viewinfo_')) {
+    const uid = data.replace('viewinfo_', '');
+    await showUserInfo(chatId, uid);
   }
-
-  if (data.startsWith('cap_edit_')) {
-    const i = parseInt(data.replace('cap_edit_', ''));
-    pendingCaption[chatId] = { action: 'edit', captionId: i };
-    return sendMsg(chatId, `✏️ Caption edit করুন:\n\n${(db.adminCaptions[i] || {}).text || ''}`, {
-      reply_markup: { force_reply: true }
-    });
+  if (data.startsWith('delrecv_')) {
+    const msgId = data.replace('delrecv_', '');
+    await deleteMessage(chatId, msgId, 'received');
   }
-
-  if (data.startsWith('cap_del_')) {
-    const i = parseInt(data.replace('cap_del_', ''));
-    if (db.adminCaptions && db.adminCaptions[i]) {
-      db.adminCaptions.splice(i, 1);
-      await saveDB(db);
-      return sendMsg(chatId, '✅ Caption deleted!');
-    }
+  if (data.startsWith('delreply_')) {
+    const msgId = data.replace('delreply_', '');
+    await deleteMessage(chatId, msgId, 'reply');
   }
-
-  if (data.startsWith('cap_view_')) {
-    const i = parseInt(data.replace('cap_view_', ''));
-    const cap = (db.adminCaptions || [])[i];
-    if (cap) {
-      return sendMsg(chatId, `📝 Caption:\n\n${cap.text}\n\n📅 Added: ${cap.time}`, {
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: '✏️ Edit', callback_data: `cap_edit_${i}` }, { text: '🗑️ Delete', callback_data: `cap_del_${i}` }]
-          ]
-        }
-      });
-    }
+  if (data.startsWith('editcap_')) {
+    const capId = data.replace('editcap_', '');
+    pendingState[chatId] = { action: 'editCaption', capId };
+    await sendMsg(chatId, '✏️ নতুন Caption Text লিখুন:');
+  }
+  if (data.startsWith('delcap_')) {
+    const capId = data.replace('delcap_', '');
+    const db    = await readDB();
+    const cap   = (db.captions||[]).find(c => c.id === capId);
+    if (cap) { cap.deleted = true; await writeDB(db); await sendMsg(chatId, '🗑️ Caption Deleted!'); }
+  }
+  if (data === 'addcaption') {
+    pendingState[chatId] = { action: 'addCaption' };
+    await sendMsg(chatId, '📝 নতুন Caption লিখুন:');
   }
 }
 
-// ===== MESSAGE HANDLER =====
+// ─── MESSAGE HANDLER ──────────────────────────────
 async function handleMessage(msg) {
-  const chatId = msg.chat.id;
-  const text = (msg.text || '').trim();
+  const chatId = String(msg.chat.id);
+  const text   = (msg.text || '').trim();
+  if (!text) return;
 
+  // Only admin
   if (!isAdmin(chatId)) {
-    return sendMsg(chatId, '❌ এই bot শুধু admin ব্যবহার করতে পারবেন।');
+    await sendMsg(chatId, '❌ Access Denied. This bot is for admin only.');
+    return;
   }
 
-  // Command check
-  if (text.startsWith('/')) {
+  // ── Check pending state ──
+  const state = pendingState[chatId];
+  if (state) {
+    delete pendingState[chatId];
+
+    if (state.action === 'replyToUser') {
+      await replyToUser(chatId, state.targetUid, text);
+      return;
+    }
+    if (state.action === 'sendMessage_awaitId') {
+      pendingState[chatId] = { action: 'sendMessage_awaitMsg', targetUid: text };
+      await sendMsg(chatId, '💌 এখন Message লিখুন:');
+      return;
+    }
+    if (state.action === 'sendMessage_awaitMsg') {
+      await replyToUser(chatId, state.targetUid, text);
+      return;
+    }
+    if (state.action === 'broadcast') {
+      await doBroadcast(chatId, text);
+      return;
+    }
+    if (state.action === 'addCaption') {
+      await addAdminCaption(chatId, text);
+      return;
+    }
+    if (state.action === 'editCaption') {
+      await editAdminCaption(chatId, state.capId, text);
+      return;
+    }
+    if (state.action === 'ban') {
+      await banUser(chatId, text, true);
+      return;
+    }
+    if (state.action === 'unban') {
+      await banUser(chatId, text, false);
+      return;
+    }
+    if (state.action === 'viewInfo') {
+      await showUserInfo(chatId, text);
+      return;
+    }
+  }
+
+  // ── Commands ──
+  if (text === '/start' || text === '/start@')         return handleStart(chatId);
+  if (text === '/help' || text === '🆘 Help')          return handleHelp(chatId);
+  if (text === '/received' || text === '📥 Received History') return handleReceived(chatId);
+  if (text === '/replyhistory' || text === '📤 Reply History') return handleReplyHistory(chatId);
+  if (text === '/users' || text === '👥 Show All User') return handleUsers(chatId);
+  if (text === '/caption' || text === '📝 Caption BOX') return handleCaptions(chatId);
+
+  if (text === '📨 Send Message' || text === '/send') {
+    pendingState[chatId] = { action: 'sendMessage_awaitId' };
+    await sendMsg(chatId, '🆔 Enter User ID:');
+    return;
+  }
+  if (text === '📢 Broadcast' || text === '/broadcast') {
+    pendingState[chatId] = { action: 'broadcast' };
+    await sendMsg(chatId, '📢 Broadcast Message লিখুন (সকল User-এর কাছে যাবে):');
+    return;
+  }
+
+  // Command: /send 1001 Hello
+  if (text.startsWith('/send ')) {
     const parts = text.split(' ');
-    const cmd = parts[0].toLowerCase().split('@')[0];
-    const args = parts.slice(1);
-    return handleCommand(chatId, cmd, args);
-  }
-
-  const db = await getDB();
-
-  // Keyboard text handlers
-  if (text === '📋 Show All Users') return showAllUsers(chatId, db);
-  if (text === '📤 Reply History') return showReplyHistory(chatId, db);
-  if (text === '📥 Received History') return showReceivedHistory(chatId, db);
-  if (text === '❓ Help') return showHelp(chatId);
-  if (text === '✍️ Caption Box') return showCaptionMenu(chatId, db);
-
-  if (text === '💌 Send') {
-    pendingSend[chatId] = { step: 'userId' };
-    return sendMsg(chatId, '🆔 User ID লিখুন:', { reply_markup: { force_reply: true } });
-  }
-
-  if (text === '📢 Broadcast') {
-    pendingBroadcast[chatId] = true;
-    return sendMsg(chatId, '📢 Broadcast message লিখুন:', { reply_markup: { force_reply: true } });
-  }
-
-  // Pending reply
-  if (pendingReplies[chatId]) {
-    const { userId } = pendingReplies[chatId];
-    delete pendingReplies[chatId];
-    return sendReplyToUser(chatId, userId, text, db);
-  }
-
-  // Pending broadcast
-  if (pendingBroadcast[chatId]) {
-    delete pendingBroadcast[chatId];
-    return sendBroadcast(chatId, text, db);
-  }
-
-  // Pending send steps
-  if (pendingSend[chatId]) {
-    const state = pendingSend[chatId];
-    if (state.step === 'userId') {
-      pendingSend[chatId] = { step: 'message', userId: text };
-      return sendMsg(chatId, `✅ User ID: ${text}\n\n💬 এখন message লিখুন:`, {
-        reply_markup: { force_reply: true }
-      });
-    } else if (state.step === 'message') {
-      const userId = state.userId;
-      delete pendingSend[chatId];
-      return sendReplyToUser(chatId, userId, text, db);
+    if (parts.length >= 3) {
+      const uid  = parts[1];
+      const rmsg = parts.slice(2).join(' ');
+      await replyToUser(chatId, uid, rmsg);
+    } else {
+      pendingState[chatId] = { action: 'sendMessage_awaitId' };
+      await sendMsg(chatId, '🆔 Enter User ID:');
     }
+    return;
+  }
+  if (text.startsWith('/ban '))   { await banUser(chatId, text.split(' ')[1], true); return; }
+  if (text.startsWith('/unban ')) { await banUser(chatId, text.split(' ')[1], false); return; }
+  if (text.startsWith('/info '))  { await showUserInfo(chatId, text.split(' ')[1]); return; }
+  if (text.startsWith('/delete ')) {
+    const parts = text.split(' ');
+    if (parts[1] && parts[2]) { await deleteMessage(chatId, parts[2], parts[1]); } return;
+  }
+  if (text === '/status') { await handleStatus(chatId); return; }
+  if (text === '/ban') {
+    pendingState[chatId] = { action: 'ban' };
+    await sendMsg(chatId, '🚫 Ban করার জন্য User ID দিন:');
+    return;
+  }
+  if (text === '/unban') {
+    pendingState[chatId] = { action: 'unban' };
+    await sendMsg(chatId, '✅ Unban করার জন্য User ID দিন:');
+    return;
+  }
+  if (text === '/info') {
+    pendingState[chatId] = { action: 'viewInfo' };
+    await sendMsg(chatId, '🆔 User ID দিন:');
+    return;
   }
 
-  // Pending caption
-  if (pendingCaption[chatId]) {
-    const state = pendingCaption[chatId];
-    delete pendingCaption[chatId];
-    const time = new Date().toLocaleString('bn-BD');
-
-    if (!db.adminCaptions) db.adminCaptions = [];
-
-    if (state.action === 'add') {
-      db.adminCaptions.push({ text, time, addedBy: 'admin' });
-      await saveDB(db);
-
-      // Notify all users (via replies)
-      const userIds = Object.keys(db.users || {});
-      if (!db.replies) db.replies = [];
-      const notifId = Date.now().toString();
-      userIds.forEach(uid => {
-        db.replies.push({
-          id: `cap_notif_${notifId}_${uid}`,
-          userId: uid,
-          message: `✨ New Caption Added!\n\n${text}\n\n📅 Added: ${time}`,
-          sentTime: time,
-          seenByUser: false,
-          isCaption: true
-        });
-      });
-      await saveDB(db);
-
-      return sendMsg(chatId, `✅ Caption Added!\n\nCaption: ${text}\nTime: ${time}\n\nSent notification to ${userIds.length} users.`, {
-        reply_markup: adminKeyboard
-      });
-    } else if (state.action === 'edit' && state.captionId !== undefined) {
-      if (db.adminCaptions[state.captionId]) {
-        db.adminCaptions[state.captionId].text = text;
-        db.adminCaptions[state.captionId].editedTime = time;
-        await saveDB(db);
-        return sendMsg(chatId, '✅ Caption Updated!', { reply_markup: adminKeyboard });
-      }
-    }
-  }
-
-  return sendMsg(chatId, '❓ কী করতে চান? /help দেখুন।', { reply_markup: adminKeyboard });
+  // Unknown
+  await sendMsg(chatId, '❓ Unknown command. /help দিয়ে সব command দেখুন।', { reply_markup: MAIN_KEYBOARD });
 }
 
-// ===== POLLING =====
-async function poll() {
-  try {
-    const r = await fetch(`${TG_API}/getUpdates?offset=${offset}&timeout=25&allowed_updates=["message","callback_query"]`);
-    const data = await r.json();
+// ─── ACTIONS ──────────────────────────────────────
+async function handleStart(chatId) {
+  await sendMsg(chatId, `╔══════════════════════╗\n💌 <b>Welcome Back To\nচিঠি পাঠাও</b>\n╚══════════════════════╝\n\n✨ Anonymous Messaging Platform\n\n📌 <b>Available Features:</b>\n🔘 Send Message\n🔘 Receive Reply\n🔘 Push Notification\n🔘 Broadcast Notification\n🔘 Caption System\n🔘 User Management\n\n━━━━━━━━━━━━━━━━\n<b>Available Commands:</b>\n/send /received /replyhistory\n/users /broadcast /caption /help`, { reply_markup: MAIN_KEYBOARD });
+}
 
-    if (data.ok && data.result && data.result.length) {
-      for (const update of data.result) {
-        offset = update.update_id + 1;
+async function handleHelp(chatId) {
+  await sendMsg(chatId, `╔══════════════════════╗\n🤖 <b>BOT HELP & COMMAND MENU</b>\n╚══════════════════════╝\n\n📌 <b>Available Commands:</b>\n/start → Open Welcome Menu\n/send → Send Reply To User\n/received → View Received Messages\n/replyhistory → View Sent Replies\n/users → Show All Registered Users\n/broadcast → Send Broadcast\n/caption → Manage Captions\n/ban → Ban Any User\n/unban → Unban Any User\n/info → View User Information\n/status → View Bot Status\n/help → This Menu\n\n━━━━━━━━━━━━━━━━\n<b>Quick Commands:</b>\n<code>/send 1001 Hello World</code>\n<code>/ban 1001</code>\n<code>/info 1002</code>`, { reply_markup: MAIN_KEYBOARD });
+}
 
-        if (update.message) {
-          await handleMessage(update.message).catch(e => console.error('Message Error:', e));
-        } else if (update.callback_query) {
-          await handleCallback(update.callback_query).catch(e => console.error('Callback Error:', e));
-        }
-      }
-    }
-  } catch(e) {
-    console.error('Poll Error:', e.message);
+async function handleReceived(chatId) {
+  const db   = await readDB();
+  const msgs = (db.sentMessages||[]).filter(m => !m.deleted).slice(-20).reverse();
+  if (!msgs.length) { await sendMsg(chatId, '📭 কোনো Received Message নেই।', { reply_markup: MAIN_KEYBOARD }); return; }
+
+  for (const m of msgs.slice(0,10)) {
+    const kb = { inline_keyboard: [[{ text: '✉️ Reply', callback_data: `reply_${m.uid}` }, { text: '🗑️ Delete', callback_data: `delrecv_${m.msgId}` }]] };
+    await sendMsg(chatId, `┌────────────────────────\nMsg ID: ${m.msgId}\nUser ID: <b>${m.uid}</b>\nName: ${m.name||'Hidden'}\nMessage: <i>${m.message.slice(0,200)}</i>\nReceived Time: ${m.time}\n└────────────────────────`, { reply_markup: kb });
   }
-
-  setTimeout(poll, 1000);
 }
 
-// ===== START =====
-async function start() {
-  console.log('🤖 Bot starting...');
-  await setCommands();
-  await sendMsg(ADMIN_ID, `
-🚀 <b>Bot Started!</b>
+async function handleReplyHistory(chatId) {
+  const db   = await readDB();
+  const msgs = (db.receivedMessages||[]).filter(m => !m.deleted).slice(-20).reverse();
+  if (!msgs.length) { await sendMsg(chatId, '📤 কোনো Reply History নেই।', { reply_markup: MAIN_KEYBOARD }); return; }
 
-🌐 Site: ${SITE_URL}
-⏰ Time: ${new Date().toLocaleString()}
-
-Type /help to see all commands.
-  `.trim(), { reply_markup: adminKeyboard });
-
-  console.log('✅ Bot started! Polling...');
-  poll();
+  for (const m of msgs.slice(0,10)) {
+    const kb = { inline_keyboard: [[{ text: '🗑️ Delete', callback_data: `delreply_${m.msgId}` }]] };
+    await sendMsg(chatId, `┌────────────────────────\nMsg ID: ${m.msgId}\nUser ID: <b>${m.uid}</b>\nMessage: <i>${m.message.slice(0,200)}</i>\nSend Time: ${m.time}\n└────────────────────────`, { reply_markup: kb });
+  }
 }
 
-start();
+async function handleUsers(chatId) {
+  const db    = await readDB();
+  const users = Object.entries(db.users||{});
+  if (!users.length) { await sendMsg(chatId, '👥 কোনো Registered User নেই।', { reply_markup: MAIN_KEYBOARD }); return; }
+
+  await sendMsg(chatId, `╔══════════════════════════════╗\n👥 <b>REGISTERED USER ID LIST</b>\n╚══════════════════════════════╝\n\nTotal Users: ${users.length}`);
+
+  let i = 1;
+  for (const [uid, u] of users.slice(0,20)) {
+    const kb = { inline_keyboard: [
+      [{ text: '🔘 View User Info', callback_data: `viewinfo_${uid}` }],
+      [{ text: '🚫 Ban User', callback_data: `ban_${uid}` }, { text: '✅ Unban', callback_data: `unban_${uid}` }]
+    ]};
+    await sendMsg(chatId, `━━━━━━━━━━━━━━━━━━\n🔢 Number: ${i}\n🆔 User ID: <b>${uid}</b>\n📛 Name: ${u.name||'—'}\n🔴 Status: ${u.banned?'Banned':'Active'}`, { reply_markup: kb });
+    i++;
+  }
+}
+
+async function showUserInfo(chatId, uid) {
+  const db   = await readDB();
+  const user = db.users[uid];
+  if (!user) { await sendMsg(chatId, `❌ User ID ${uid} not found.`); return; }
+
+  const sent     = (db.sentMessages||[]).filter(m => m.uid===uid && !m.deleted).length;
+  const received = (db.receivedMessages||[]).filter(m => m.uid===uid && !m.deleted).length;
+
+  await sendMsg(chatId, `━━━━━━━━━━━━━━━━━━━━━━━\n🔰 <b>USER PROFILE INFORMATION</b> 🔰\n━━━━━━━━━━━━━━━━━━━━━━━\n\n🆔 User ID: <b>${uid}</b>\n👤 Full Name: ${user.name||'Hidden User'}\n📱 Phone: ${user.whatsapp||'Hidden'}\n🔗 FB Profile: ${user.fbLink||'Not Added'}\n🌍 Location: ${user.city||'—'}, ${user.country||'—'}\n📶 IP: <code>${user.ip||'—'}</code>\n📱 Device: ${user.deviceInfo||'—'}\n🧠 Browser: <code>${(user.ua||'—').slice(0,80)}</code>\n🔔 Notification: ${user.notifAllowed?'Allowed ✅':'Disabled ❌'}\n💌 Total Sent: ${sent}\n📥 Total Received: ${received}\n🔴 Status: ${user.banned?'BANNED 🚫':'Active ✅'}\n📅 Registered: ${user.registeredDate||'—'}\n🕒 Last Active: ${user.lastActive||'—'}\n💬 Last Msg: ${user.lastMsg||'—'}`, {
+    reply_markup: { inline_keyboard: [
+      [{ text: '✉️ Reply', callback_data: `reply_${uid}` }, { text: user.banned?'✅ Unban':'🚫 Ban', callback_data: `${user.banned?'unban':'ban'}_${uid}` }]
+    ]}
+  });
+}
+
+async function banUser(chatId, uid, ban) {
+  const db = await readDB();
+  if (!db.users[uid]) { await sendMsg(chatId, `❌ User ID ${uid} not found.`); return; }
+  db.users[uid].banned = ban;
+  await writeDB(db);
+  await sendMsg(chatId, `${ban?'🚫 User Banned':'✅ User Unbanned'}: <b>${uid}</b>`, { reply_markup: MAIN_KEYBOARD });
+}
+
+async function replyToUser(chatId, uid, message) {
+  const db   = await readDB();
+  if (!db.users[uid]) { await sendMsg(chatId, `❌ User ID ${uid} not found.`, { reply_markup: MAIN_KEYBOARD }); return; }
+  if (!db.receivedMessages) db.receivedMessages = [];
+
+  const time  = getBDTime();
+  const msgId = String(db.nextMsgId||1).padStart(3,'0');
+  db.receivedMessages.push({ msgId, uid, message, time, deleted: false, replyTime: time });
+  db.nextMsgId = (db.nextMsgId||1) + 1;
+  if (db.users[uid]) { db.users[uid].totalReceived = (db.users[uid].totalReceived||0) + 1; }
+  await writeDB(db);
+
+  await sendMsg(chatId, `╔══════════════════════╗\n📤 <b>REPLY STATUS REPORT</b>\n╚══════════════════════╝\n\n✅ Reply Sent To UserID: <b>${uid}</b>\n🕒 Time: ${time}\n⏳ Status: Wait For User Seen Your Message!`, { reply_markup: MAIN_KEYBOARD });
+}
+
+async function doBroadcast(chatId, message) {
+  const db   = await readDB();
+  if (!db.broadcasts) db.broadcasts = [];
+  const time = getBDTime();
+  const bc   = { id: `bc_${Date.now()}`, message, time };
+  db.broadcasts.push(bc);
+  if (db.broadcasts.length > 10) db.broadcasts = db.broadcasts.slice(-10);
+  await writeDB(db);
+
+  const userCount = Object.keys(db.users||{}).length;
+  await sendMsg(chatId, `✅ <b>Broadcast Successfully Sent To Website All Users!</b>\n\n🕒 Send Time: ${time}\n👥 Total Users: ${userCount}`, { reply_markup: MAIN_KEYBOARD });
+}
+
+async function handleCaptions(chatId) {
+  const db   = await readDB();
+  const caps = (db.captions||[]).filter(c => !c.deleted && c.source==='admin');
+
+  await sendMsg(chatId, `╔══════════════════════╗\n📝 <b>WEBSITE CAPTION LIST</b>\n╚══════════════════════╝\n\nAdmin Captions: ${caps.length}`, {
+    reply_markup: { inline_keyboard: [[{ text:'➕ Add New Caption', callback_data:'addcaption' }]] }
+  });
+
+  for (const c of caps.slice(0,10)) {
+    const kb = { inline_keyboard: [[{ text:'✏️ Edit', callback_data:`editcap_${c.id}` }, { text:'🗑️ Delete', callback_data:`delcap_${c.id}` }]] };
+    await sendMsg(chatId, `📌 <b>Caption Text:</b>\n${c.text}\n\n🕒 <i>${c.time}</i>`, { reply_markup: kb });
+  }
+}
+
+async function addAdminCaption(chatId, text) {
+  const db   = await readDB();
+  if (!db.captions) db.captions = [];
+  const time  = getBDTime();
+  const capId = `cap_admin_${Date.now()}`;
+  const num   = db.nextCaptionNum||1;
+  db.captions.push({ id:capId, num, text, uid:'admin', source:'admin', time, deleted:false });
+  db.nextCaptionNum = num+1;
+  await writeDB(db);
+  await sendMsg(chatId, `✅ <b>Caption Added!</b>\n\n📌 Caption: ${text}\n🕒 Time: ${time}`, { reply_markup: MAIN_KEYBOARD });
+}
+
+async function editAdminCaption(chatId, capId, newText) {
+  const db  = await readDB();
+  const cap = (db.captions||[]).find(c => c.id===capId);
+  if (!cap) { await sendMsg(chatId, '❌ Caption not found.'); return; }
+  cap.text = newText; cap.editedAt = getBDTime();
+  await writeDB(db);
+  await sendMsg(chatId, '✅ Caption Updated!', { reply_markup: MAIN_KEYBOARD });
+}
+
+async function deleteMessage(chatId, msgId, type) {
+  const db = await readDB();
+  const arr = type==='reply' ? db.receivedMessages : db.sentMessages;
+  const msg = (arr||[]).find(m => m.msgId===msgId);
+  if (msg) { msg.deleted = true; await writeDB(db); await sendMsg(chatId, '🗑️ Message Deleted (Permanently from both sides)!'); }
+  else await sendMsg(chatId, '❌ Message not found.');
+}
+
+async function handleStatus(chatId) {
+  const db = await readDB();
+  const users = Object.keys(db.users||{}).length;
+  const sent  = (db.sentMessages||[]).filter(m=>!m.deleted).length;
+  const recv  = (db.receivedMessages||[]).filter(m=>!m.deleted).length;
+  const caps  = (db.captions||[]).filter(c=>!c.deleted).length;
+  await sendMsg(chatId, `🤖 <b>BOT STATUS REPORT</b>\n\n👥 Total Users: ${users}\n💌 Sent Messages: ${sent}\n📩 Received Messages: ${recv}\n📝 Captions: ${caps}\n🕒 Time: ${getBDTime()}\n✅ Status: Online`, { reply_markup: MAIN_KEYBOARD });
+}
+
+function isAdmin(chatId) {
+  return chatId === ADMIN_ID;
+}
