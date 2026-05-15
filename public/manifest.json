@@ -1,14 +1,14 @@
 {
-  "name": "চিঠি পাঠাও - Secret Message Box",
+  "name": "চিঠি পাঠাও — Secret Message Box",
   "short_name": "চিঠি পাঠাও",
-  "description": "মনের কথা গোপনে পাঠান",
+  "description": "Anonymous Secret Message Platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d0014",
-  "theme_color": "#7c3aed",
-  "orientation": "portrait",
+  "background_color": "#06061a",
+  "theme_color": "#b44dff",
+  "orientation": "portrait-primary",
   "icons": [
-    { "src": "/icon.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icon.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }

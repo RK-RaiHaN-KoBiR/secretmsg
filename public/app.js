@@ -1,628 +1,485 @@
-// ===== CONFIG (Hidden via server-side proxy - not exposed in client) =====
-// All sensitive keys are handled through /api/ endpoints only
+/* ========== CHITHI PATHAO — app.js ========== */
+'use strict';
 
-const SITE_URL = "https://cithipathao.vercel.app";
+// ─── CONFIG ───────────────────────────────────────
+const API_BASE = '/api';
 
-// ===== USER STATE =====
-let userData = {};
-let userCaptions = [];
-let sendHistory = [];
-let receiveHistory = [];
-let seenPopups = {};
+// ─── STATE ────────────────────────────────────────
+let currentUserId = null;
+let userProfile   = {};
+let seenMsgIds    = new Set();
+let dropdownOpen  = false;
+let pollInterval  = null;
 
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', async () => {
-  initUser();
-  loadFromCookies();
-  renderCaptions();
-  renderSendHistory();
-  renderReceiveHistory();
-  updateStats();
+// ─── INIT ─────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', async () => {
+  buildStars();
+  buildHearts();
+  await initUser();
+  await loadProfile();
+  loadSendHistory();
+  loadReceivedHistory();
+  loadCaptions();
+  checkPendingPopups();
+  startPolling();
+  registerServiceWorker();
   setupCharCounter();
-  checkNewReplies();
-  loadAdminCaptions();
-
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
-
-  // Check notification permission status
-  if ('Notification' in window && Notification.permission === 'default') {
-    document.getElementById('notifAllowWrap').style.display = 'block';
-  }
+  setupDropdownClose();
+  document.getElementById('homeMenuBtn').addEventListener('click', toggleDropdown);
 });
 
-// ===== USER ID GENERATION =====
-function generateUserId() {
-  let id = '';
-  for (let i = 0; i < 4; i++) id += Math.floor(Math.random() * 10);
-  return id;
-}
-
-function initUser() {
-  let uid = getCookie('userId');
-  if (!uid) {
-    uid = generateUserId();
-    // Ensure uniqueness (basic)
-    uid = uid + Math.floor(Math.random() * 100);
-    setCookie('userId', uid, 36500); // ~100 years
-    // New user alert after 3s
-    setTimeout(() => sendNewUserAlert(), 3000);
-  }
-  userData.userId = uid;
-  document.getElementById('displayUserId').textContent = uid;
-  document.getElementById('profileUserId').textContent = uid;
-}
-
-// ===== COOKIE HELPERS =====
-function setCookie(name, value, days) {
-  const d = new Date();
-  d.setTime(d.getTime() + days * 24 * 60 * 60 * 1000);
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${d.toUTCString()};path=/;SameSite=Lax`;
-}
-
-function getCookie(name) {
-  const c = document.cookie.split(';').find(c => c.trim().startsWith(name + '='));
-  return c ? decodeURIComponent(c.trim().split('=')[1]) : null;
-}
-
-function deleteCookie(name) {
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/`;
-}
-
-// ===== LOAD FROM COOKIES =====
-function loadFromCookies() {
-  try {
-    const sh = getCookie('sendHistory');
-    if (sh) sendHistory = JSON.parse(decodeURIComponent(sh));
-  } catch(e) { sendHistory = []; }
-
-  try {
-    const rh = getCookie('receiveHistory');
-    if (rh) receiveHistory = JSON.parse(decodeURIComponent(rh));
-  } catch(e) { receiveHistory = []; }
-
-  try {
-    const uc = getCookie('userCaptions');
-    if (uc) userCaptions = JSON.parse(decodeURIComponent(uc));
-  } catch(e) { userCaptions = []; }
-
-  try {
-    const sp = getCookie('seenPopups');
-    if (sp) seenPopups = JSON.parse(decodeURIComponent(sp));
-  } catch(e) { seenPopups = {}; }
-
-  // Profile
-  const name = getCookie('profileName') || '';
-  const phone = getCookie('profilePhone') || '';
-  const fb = getCookie('profileFb') || '';
-  document.getElementById('profileName').value = name;
-  document.getElementById('profilePhone').value = phone;
-  document.getElementById('profileFb').value = fb;
-
-  // Pre-fill sender fields
-  if (name) document.getElementById('senderName').value = name;
-  if (phone) document.getElementById('senderPhone').value = phone;
-  if (fb) document.getElementById('senderFb').value = fb;
-}
-
-function saveToHistory(type, msg, time) {
-  if (type === 'send') {
-    sendHistory.unshift({ msg, time });
-    if (sendHistory.length > 50) sendHistory = sendHistory.slice(0, 50);
-    setCookie('sendHistory', encodeURIComponent(JSON.stringify(sendHistory)), 36500);
-  } else {
-    receiveHistory.unshift({ msg, time });
-    if (receiveHistory.length > 50) receiveHistory = receiveHistory.slice(0, 50);
-    setCookie('receiveHistory', encodeURIComponent(JSON.stringify(receiveHistory)), 36500);
+// ─── STAR FIELD ───────────────────────────────────
+function buildStars() {
+  const sf = document.getElementById('starField');
+  for (let i = 0; i < 120; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    s.style.cssText = `left:${Math.random()*100}%;top:${Math.random()*100}%;
+      --dur:${2+Math.random()*4}s;--delay:${Math.random()*5}s;
+      opacity:${0.1+Math.random()*0.6};width:${1+Math.random()*2}px;height:${1+Math.random()*2}px;`;
+    sf.appendChild(s);
   }
 }
 
-// ===== CHAR COUNTER =====
-function setupCharCounter() {
-  const ta = document.getElementById('msgInput');
-  ta.addEventListener('input', () => {
-    document.getElementById('charCount').textContent = ta.value.length;
-  });
+function buildHearts() {
+  const fh = document.getElementById('floatingHearts');
+  const emojis = ['💌','💜','✨','🌸','💫','🕊️'];
+  for (let i = 0; i < 18; i++) {
+    const h = document.createElement('div');
+    h.className = 'floating-heart';
+    h.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    h.style.cssText = `left:${Math.random()*100}%;--dur:${6+Math.random()*8}s;--delay:${Math.random()*10}s;`;
+    fh.appendChild(h);
+  }
 }
 
-// ===== HOME TOGGLE =====
-function toggleHome() {
-  const d = document.getElementById('homeDropdown');
-  d.style.display = d.style.display === 'none' ? 'block' : 'none';
-}
-
-function showSection(id) {
-  const panels = ['sendHistory','receiveHistory','captionBox','profile','helpSection'];
-  panels.forEach(p => {
-    document.getElementById(p).style.display = 'none';
-  });
-  document.getElementById(id).style.display = 'block';
-  document.getElementById('homeDropdown').style.display = 'none';
-
-  // Render contents
-  if (id === 'sendHistory') renderSendHistory();
-  if (id === 'receiveHistory') renderReceiveHistory();
-  if (id === 'captionBox') renderCaptions();
-
-  // Scroll to section
-  setTimeout(() => {
-    document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
-}
-
-function closeSection(id) {
-  document.getElementById(id).style.display = 'none';
-}
-
-// ===== RENDER HISTORIES =====
-function renderSendHistory() {
-  const list = document.getElementById('sendHistoryList');
-  if (!sendHistory.length) {
-    list.innerHTML = '<div class="empty-msg">💬 এখনো কোনো মেসেজ পাঠাননি।</div>';
+// ─── USER INIT ────────────────────────────────────
+async function initUser() {
+  let uid = localStorage.getItem('cpt_uid');
+  if (uid) {
+    currentUserId = uid;
+    document.getElementById('userIdBadge').textContent = `🆔 ID: ${uid}`;
+    // Check ban status
+    await checkBan(uid);
     return;
   }
-  list.innerHTML = sendHistory.map(item => `
-    <div class="history-item">
-      <div class="h-time">📅 ${item.time}</div>
-      <div class="h-msg">💌 ${escHtml(item.msg)}</div>
-    </div>
-  `).join('');
+
+  // New user — register after 5 seconds
+  setTimeout(async () => {
+    try {
+      const res  = await fetch(`${API_BASE}/user`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({action:'register'}) });
+      const data = await res.json();
+      if (data.userId) {
+        currentUserId = data.userId;
+        localStorage.setItem('cpt_uid', data.userId);
+        localStorage.setItem('cpt_registered', data.registeredDate || getBDTime());
+        document.getElementById('userIdBadge').textContent = `🆔 ID: ${data.userId}`;
+        await checkBan(data.userId);
+      }
+    } catch(e) { console.error('Register error', e); }
+  }, 5000);
 }
 
-function renderReceiveHistory() {
-  const list = document.getElementById('receiveHistoryList');
-  if (!receiveHistory.length) {
-    list.innerHTML = '<div class="empty-msg">📭 এখনো কোনো reply আসেনি।</div>';
-    return;
-  }
-  list.innerHTML = receiveHistory.map(item => `
-    <div class="history-item received">
-      <div class="h-time">📅 ${item.time}</div>
-      <div class="h-msg">💬 ${escHtml(item.msg)}</div>
-    </div>
-  `).join('');
-}
-
-// ===== CAPTIONS =====
-const defaultCaptions = [
-  '╔══════════════╗\n✨ "আল্লাহর উপর ভরসা রাখুন,\nতিনি কখনো নিরাশ করেন না।" ✨\n╚══════════════╝',
-  '╔══════════════╗\n🌙 "নামাজ হলো শান্তির চাবিকাঠি।" 🌙\n╚══════════════╝',
-  '╔══════════════╗\n🤍 "যে হৃদয়ে কুরআন আছে,\nসে হৃদয় কখনো অন্ধকার নয়।" 🤍\n╚══════════════╝',
-  '╔══════════════╗\n✨ "সবর করুন,\nআল্লাহ সবচেয়ে সুন্দর সময়টাই বেছে রাখেন।" ✨\n╚══════════════╝',
-  '╔══════════════╗\n🌸 "দুনিয়া ক্ষণস্থায়ী,\nআখিরাত চিরস্থায়ী।" 🌸\n╚══════════════╝',
-  '╔══════════════╗\n🕋 "আল্লাহর স্মরণেই\nঅন্তর প্রশান্তি পায়।" 🕋\n╚══════════════╝',
-  '╔══════════════╗\n🌙 "প্রতিটি কষ্টের পরেই\nরয়েছে স্বস্তি।" 🌙\n╚══════════════╝',
-  '╔══════════════╗\n🤲 "দোয়া কখনো বৃথা যায় না।" 🤲\n╚══════════════╝',
-  '╔══════════════╗\n✨ "পাপ যত বড়ই হোক,\nআল্লাহর রহমত তার চেয়েও বড়।" ✨\n╚══════════════╝',
-  '╔══════════════╗\n🌸 "ভালোবাসা চাইলে\nআল্লাহর কাছেই চান।" 🌸\n╚══════════════╝'
-];
-
-let adminCaptions = [];
-
-async function loadAdminCaptions() {
+async function checkBan(uid) {
   try {
-    const r = await fetch('/api/captions');
-    if (r.ok) {
-      const d = await r.json();
-      if (d.captions) adminCaptions = d.captions;
-      renderCaptions();
+    const res  = await fetch(`${API_BASE}/user?action=checkban&uid=${uid}`);
+    const data = await res.json();
+    if (data.banned) {
+      document.getElementById('banScreen').classList.remove('hidden');
+      document.getElementById('mainApp').classList.add('hidden');
     }
   } catch(e) {}
 }
 
-function renderCaptions() {
-  const list = document.getElementById('captionList');
-  if (!list) return;
-
-  const allCaps = [...defaultCaptions, ...adminCaptions];
-  const userCaps = [...userCaptions];
-
-  let html = '';
-
-  // Default/Admin captions
-  allCaps.forEach((cap, i) => {
-    html += `
-    <div class="caption-item">
-      <div class="caption-text">${escHtml(cap)}</div>
-      <div class="caption-meta">📅 Default Caption</div>
-      <div class="caption-actions">
-        <button class="cap-btn copy" onclick="copyCap(${i})">📋 Copy</button>
-      </div>
-    </div>`;
-  });
-
-  // User saved captions
-  userCaps.forEach((cap, i) => {
-    html += `
-    <div class="caption-item">
-      <div class="caption-text">${escHtml(cap.text)}</div>
-      <div class="caption-meta">📅 ${cap.time}</div>
-      <div class="caption-actions">
-        <button class="cap-btn copy" onclick="copyUserCap(${i})">📋 Copy</button>
-        <button class="cap-btn edit" onclick="editUserCap(${i})">✏️ Edit</button>
-        <button class="cap-btn del" onclick="delUserCap(${i})">🗑️ Delete</button>
-      </div>
-    </div>`;
-  });
-
-  list.innerHTML = html || '<div class="empty-msg">কোনো caption নেই।</div>';
-}
-
-const allDefaultCaps = [...defaultCaptions];
-
-function copyCap(i) {
-  const all = [...defaultCaptions, ...adminCaptions];
-  navigator.clipboard.writeText(all[i]).then(() => showToast('📋 Copied!')).catch(() => {});
-}
-
-function copyUserCap(i) {
-  navigator.clipboard.writeText(userCaptions[i].text).then(() => showToast('📋 Copied!')).catch(() => {});
-}
-
-function editUserCap(i) {
-  const newText = prompt('✏️ Caption Edit করুন:', userCaptions[i].text);
-  if (newText !== null && newText.trim()) {
-    userCaptions[i].text = newText.trim();
-    userCaptions[i].time = nowStr();
-    setCookie('userCaptions', encodeURIComponent(JSON.stringify(userCaptions)), 36500);
-    sendUserCaptionToBot(newText.trim(), 'edited');
-    renderCaptions();
-  }
-}
-
-function delUserCap(i) {
-  if (confirm('🗑️ এই caption মুছে ফেলবেন?')) {
-    userCaptions.splice(i, 1);
-    setCookie('userCaptions', encodeURIComponent(JSON.stringify(userCaptions)), 36500);
-    renderCaptions();
-  }
-}
-
-async function addUserCaption() {
-  const inp = document.getElementById('newCaptionInput');
-  const text = inp.value.trim();
-  if (!text) { showToast('⚠️ Caption লিখুন!'); return; }
-
-  const cap = { text, time: nowStr() };
-  userCaptions.unshift(cap);
-  setCookie('userCaptions', encodeURIComponent(JSON.stringify(userCaptions)), 36500);
-  inp.value = '';
-  renderCaptions();
-  showToast('✅ Caption Save হয়েছে!');
-
-  // Send to admin bot
-  await sendUserCaptionToBot(text, 'new');
-}
-
-async function sendUserCaptionToBot(text, action) {
+// ─── PROFILE ──────────────────────────────────────
+async function loadProfile() {
+  if (!currentUserId) return;
   try {
-    await fetch('/api/caption-notify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: userData.userId,
-        text,
-        action,
-        time: nowStr()
-      })
-    });
+    const res  = await fetch(`${API_BASE}/user?action=profile&uid=${currentUserId}`);
+    const data = await res.json();
+    userProfile = data || {};
   } catch(e) {}
 }
 
-// ===== PROFILE =====
-function saveProfile() {
-  const name = document.getElementById('profileName').value.trim();
-  const phone = document.getElementById('profilePhone').value.trim();
-  const fb = document.getElementById('profileFb').value.trim();
+function renderProfile() {
+  const p = userProfile;
+  const uid = currentUserId || '----';
+  const regDate = localStorage.getItem('cpt_registered') || '—';
+  const notifStatus = Notification.permission === 'granted' ? '✅ Allowed' : '❌ Disabled';
 
-  setCookie('profileName', name, 36500);
-  setCookie('profilePhone', phone, 36500);
-  setCookie('profileFb', fb, 36500);
-
-  // Update send form too
-  if (name) document.getElementById('senderName').value = name;
-  if (phone) document.getElementById('senderPhone').value = phone;
-  if (fb) document.getElementById('senderFb').value = fb;
-
-  showToast('✅ Profile Save হয়েছে!');
+  document.getElementById('profileBody').innerHTML = `
+    <div class="profile-card">
+      <div class="profile-row"><span class="profile-label">🆔 My ID</span><span class="profile-val" style="color:var(--neon-purple);font-family:'Orbitron',monospace">${uid}</span></div>
+      <div class="profile-row"><span class="profile-label">👤 Name</span><span class="profile-val">${p.name||'Not Set'}</span></div>
+      <div class="profile-row"><span class="profile-label">📱 WhatsApp</span><span class="profile-val">${p.whatsapp||'Not Set'}</span></div>
+      <div class="profile-row"><span class="profile-label">🌐 FB Link</span><span class="profile-val">${p.fbLink||'Not Added'}</span></div>
+      <div class="profile-row"><span class="profile-label">💌 Total Sent</span><span class="profile-val">${p.totalSent||0}</span></div>
+      <div class="profile-row"><span class="profile-label">📩 Total Received</span><span class="profile-val">${p.totalReceived||0}</span></div>
+      <div class="profile-row"><span class="profile-label">📅 Registered</span><span class="profile-val">${regDate}</span></div>
+      <div class="profile-row"><span class="profile-label">🔔 Notification</span><span class="profile-val">${notifStatus}</span></div>
+    </div>
+    <div class="profile-edit-section">
+      <label>✏️ Your Name (Optional)</label>
+      <input type="text" id="editName" value="${p.name||''}" placeholder="আপনার নাম..."/>
+      <label>📱 WhatsApp Number (Optional)</label>
+      <input type="tel" id="editWhatsapp" value="${p.whatsapp||''}" placeholder="+8801XXXXXXXXX"/>
+      <label>🌐 FB ID Link (Optional)</label>
+      <input type="url" id="editFb" value="${p.fbLink||''}" placeholder="https://facebook.com/..."/>
+      <button class="profile-save-btn" onclick="saveProfile()">💾 Save Profile</button>
+    </div>
+  `;
 }
 
-// ===== STATS =====
-function updateStats() {
-  document.getElementById('totalSend').textContent = sendHistory.length;
-  document.getElementById('totalReceive').textContent = receiveHistory.length;
+async function saveProfile() {
+  const name     = document.getElementById('editName').value.trim();
+  const whatsapp = document.getElementById('editWhatsapp').value.trim();
+  const fbLink   = document.getElementById('editFb').value.trim();
+  try {
+    const res = await fetch(`${API_BASE}/user`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'updateProfile', uid:currentUserId, name, whatsapp, fbLink})
+    });
+    const data = await res.json();
+    if (data.ok) { userProfile = {...userProfile, name, whatsapp, fbLink}; showToast('✅ Profile Saved!'); renderProfile(); }
+  } catch(e) { showToast('❌ Error saving profile'); }
 }
 
-// ===== SEND MESSAGE =====
+// ─── SEND MESSAGE ─────────────────────────────────
 async function sendMessage() {
-  const msg = document.getElementById('msgInput').value.trim();
-  if (!msg) { showToast('⚠️ মেসেজ লিখুন!'); return; }
+  const msgBox = document.getElementById('msgBox');
+  const msg = msgBox.value.trim();
+  if (!msg) { showToast('⚠️ Please write a message!'); return; }
 
   const isAnon = document.getElementById('anonCheck').checked;
-  const name = isAnon ? 'Unknown User' : (document.getElementById('senderName').value.trim() || 'Anonymous');
-  const phone = isAnon ? 'Hidden' : (document.getElementById('senderPhone').value.trim() || 'N/A');
-  const fb = isAnon ? 'Hidden' : (document.getElementById('senderFb').value.trim() || 'N/A');
+  const name   = isAnon ? 'Unknown User' : (document.getElementById('userName').value.trim() || '');
+  const wa     = isAnon ? '' : document.getElementById('userWhatsapp').value.trim();
+  const fb     = isAnon ? '' : document.getElementById('userFbLink').value.trim();
 
-  const btn = document.querySelector('.send-btn');
-  const btnText = document.querySelector('.send-btn-text');
-  const loader = document.getElementById('sendLoader');
-
+  const btn = document.getElementById('sendBtn');
   btn.disabled = true;
-  btnText.style.display = 'none';
-  loader.style.display = 'inline';
-
-  const time = nowStr();
+  btn.querySelector('.send-btn-inner').textContent = '⏳ Sending...';
 
   try {
-    // Collect device info
-    const devInfo = await getDeviceInfo();
-
-    const payload = {
-      userId: userData.userId,
-      name,
-      phone,
-      fb,
-      message: msg,
-      time,
-      anon: isAnon,
-      deviceInfo: devInfo
-    };
-
-    const r = await fetch('/api/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    const res  = await fetch(`${API_BASE}/send`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({uid: currentUserId, name, whatsapp: wa, fbLink: fb, message: msg, anonymous: isAnon})
     });
-
-    if (r.ok) {
-      // Save to history
-      saveToHistory('send', msg, time);
-      renderSendHistory();
-      updateStats();
-
-      document.getElementById('msgInput').value = '';
+    const data = await res.json();
+    if (data.ok) {
+      msgBox.value = '';
       document.getElementById('charCount').textContent = '0';
-
-      // Show success popup
-      document.getElementById('successTime').textContent = '📅 ' + time;
-      showPopup('successPopup');
-
-      // Ask notification permission
-      if ('Notification' in window && Notification.permission === 'default') {
-        setTimeout(() => showPopup('notifPopup'), 800);
-      }
-    } else {
-      showToast('❌ মেসেজ পাঠাতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
-    }
-  } catch(e) {
-    showToast('❌ Network Error। আবার চেষ্টা করুন।');
+      showPopup('sentPopup');
+      loadSendHistory();
+      setTimeout(() => { if (Notification.permission !== 'granted') showPopup('notifPopup'); }, 1500);
+    } else { showToast('❌ Send failed. Try again.'); }
+  } catch(e) { showToast('❌ Network error.'); }
+  finally {
+    btn.disabled = false;
+    btn.querySelector('.send-btn-inner').textContent = '✉️ Send Message!';
   }
-
-  btn.disabled = false;
-  btnText.style.display = 'inline';
-  loader.style.display = 'none';
 }
 
-// ===== NEW USER ALERT =====
-async function sendNewUserAlert() {
+// ─── SEND HISTORY ─────────────────────────────────
+async function loadSendHistory() {
+  if (!currentUserId) return;
   try {
-    const devInfo = await getDeviceInfo();
-    await fetch('/api/new-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: userData.userId,
-        time: nowStr(),
-        deviceInfo: devInfo
-      })
-    });
+    const res  = await fetch(`${API_BASE}/send?uid=${currentUserId}`);
+    const data = await res.json();
+    const body = document.getElementById('sendHistoryBody');
+    if (!data.messages || !data.messages.length) {
+      body.innerHTML = '<div class="empty-state">💬 কোনো Message পাঠানো হয়নি।</div>'; return;
+    }
+    body.innerHTML = data.messages.map(m => `
+      <div class="msg-card">
+        <div class="msg-card-row"><span>Msg ID:</span><span style="color:var(--neon-purple)">${m.msgId}</span></div>
+        <div class="msg-card-row"><span>User ID:</span><span style="color:var(--neon-blue)">${m.uid}</span></div>
+        <div class="msg-card-text">${escHtml(m.message)}</div>
+        <div class="msg-card-time">🕒 ${m.time}</div>
+      </div>`).join('');
   } catch(e) {}
 }
 
-// ===== DEVICE INFO =====
-async function getDeviceInfo() {
-  const info = {};
-
-  info.userAgent = navigator.userAgent;
-  info.platform = navigator.platform || 'Unknown';
-  info.language = navigator.language;
-  info.screenRes = `${screen.width}x${screen.height}`;
-  info.charging = 'Unknown';
-  info.network = navigator.connection ? (navigator.connection.effectiveType || 'Unknown') : 'Unknown';
-
-  // Battery
-  if (navigator.getBattery) {
-    try {
-      const b = await navigator.getBattery();
-      info.charging = b.charging ? `Charging (${Math.round(b.level * 100)}%)` : `${Math.round(b.level * 100)}%`;
-    } catch(e) {}
-  }
-
-  // IP & Location from API
+// ─── RECEIVED HISTORY ─────────────────────────────
+async function loadReceivedHistory() {
+  if (!currentUserId) return;
   try {
-    const ipR = await fetch('https://ipapi.co/json/', { signal: AbortSignal.timeout(4000) });
-    if (ipR.ok) {
-      const ipData = await ipR.json();
-      info.ip = ipData.ip || 'N/A';
-      info.country = ipData.country_name || 'N/A';
-      info.region = ipData.region || 'N/A';
-      info.city = ipData.city || 'N/A';
-      info.isp = ipData.org || 'N/A';
+    const res  = await fetch(`${API_BASE}/send?uid=${currentUserId}&type=received`);
+    const data = await res.json();
+    const body = document.getElementById('receivedHistoryBody');
+    if (!data.messages || !data.messages.length) {
+      body.innerHTML = '<div class="empty-state">📭 কোনো Message Receive হয়নি।</div>'; return;
     }
-  } catch(e) {
-    info.ip = 'N/A';
-    info.country = 'N/A';
-    info.region = 'N/A';
-    info.city = 'N/A';
-    info.isp = 'N/A';
-  }
-
-  // RAM
-  info.ram = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'Unknown';
-
-  // Device model from UA
-  const ua = navigator.userAgent;
-  let model = 'Unknown';
-  const mMatch = ua.match(/\(([^)]+)\)/);
-  if (mMatch) model = mMatch[1].split(';')[0].trim();
-  info.deviceModel = model;
-
-  return info;
-}
-
-// ===== CHECK REPLIES =====
-async function checkNewReplies() {
-  try {
-    const r = await fetch(`/api/replies?userId=${userData.userId}`);
-    if (r.ok) {
-      const d = await r.json();
-      if (d.replies && d.replies.length) {
-        d.replies.forEach(reply => {
-          const key = `reply_${reply.id}`;
-          if (!seenPopups[key]) {
-            seenPopups[key] = true;
-            setCookie('seenPopups', encodeURIComponent(JSON.stringify(seenPopups)), 36500);
-
-            // Save to receive history
-            saveToHistory('receive', reply.message, reply.time);
-            renderReceiveHistory();
-            updateStats();
-
-            // Show popup (only once)
-            document.getElementById('replyMsgContent').innerHTML = `
-              <div><b>📅 Time:</b> ${escHtml(reply.time)}</div>
-              <div style="margin-top:8px"><b>💬 Message From Admin:</b></div>
-              <div style="margin-top:4px">${escHtml(reply.message)}</div>
-            `;
-            showPopup('replyPopup');
-
-            // Push notification
-            showPushNotification('💌 নতুন Reply এসেছে!', reply.message);
-
-            // Mark as seen
-            fetch('/api/mark-seen', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ userId: userData.userId, replyId: reply.id, time: nowStr() })
-            }).catch(() => {});
-          }
-        });
-      }
-    }
+    body.innerHTML = data.messages.map(m => `
+      <div class="msg-card" data-msgid="${m.msgId}">
+        <div class="msg-card-row"><span>Msg ID:</span><span style="color:var(--neon-blue)">${m.msgId}</span></div>
+        <div class="msg-card-row"><span>From:</span><span style="color:var(--neon-green)">Admin</span></div>
+        <div class="msg-card-text">${escHtml(m.message)}</div>
+        <div class="msg-card-time">🕒 ${m.time}</div>
+      </div>`).join('');
+    // Mark as seen
+    markSeen(data.messages);
   } catch(e) {}
-
-  // Check every 30s
-  setTimeout(checkNewReplies, 30000);
 }
 
-// ===== NOTIFICATIONS =====
-async function requestNotification() {
-  if (!('Notification' in window)) {
-    showToast('❌ এই browser-এ Notification support নেই।');
-    closePopup('notifPopup');
-    return;
-  }
-
-  const perm = await Notification.requestPermission();
-  if (perm === 'granted') {
-    showToast('✅ Notification Allow হয়েছে!');
-    closePopup('notifPopup');
-
-    // Subscribe to push if SW available
-    if ('serviceWorker' in navigator) {
+async function markSeen(messages) {
+  for (const m of messages) {
+    if (!seenMsgIds.has(m.msgId)) {
+      seenMsgIds.add(m.msgId);
       try {
-        const reg = await navigator.serviceWorker.ready;
-        // Store subscription via API
-        await fetch('/api/subscribe', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: userData.userId })
+        await fetch(`${API_BASE}/send`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({action:'markSeen', uid:currentUserId, msgId:m.msgId})
         });
       } catch(e) {}
     }
-
-    document.getElementById('notifAllowWrap').style.display = 'none';
-  } else {
-    showToast('⚠️ Notification allow করা হয়নি।');
-    closePopup('notifPopup');
   }
 }
 
-function showPushNotification(title, body) {
-  if ('Notification' in window && Notification.permission === 'granted') {
-    try {
-      new Notification(title, {
-        body: body.substring(0, 100),
-        icon: '/icon.png',
-        badge: '/icon.png',
-        tag: 'secret-msg-reply'
-      });
-    } catch(e) {}
-  }
+// ─── CAPTIONS ─────────────────────────────────────
+async function loadCaptions() {
+  try {
+    const res  = await fetch(`${API_BASE}/caption?uid=${currentUserId||''}`);
+    const data = await res.json();
+    renderCaptions(data.captions || []);
+  } catch(e) {}
 }
 
-// ===== POPUP HELPERS =====
-function showPopup(id) {
-  document.getElementById(id).style.display = 'flex';
+function renderCaptions(captions) {
+  const body = document.getElementById('captionListBody');
+  if (!captions.length) { body.innerHTML = '<div class="empty-state">📝 কোনো Caption নেই।</div>'; return; }
+
+  body.innerHTML = captions.map(c => {
+    const isAdmin = c.source === 'admin';
+    const actions = isAdmin
+      ? `<span class="cap-btn cap-copy" onclick="copyCaption('${escAttr(c.text)}')">📋 Copy</span>
+         <span class="cap-readonly">❌ You Cannot Edit/Delete</span>`
+      : (c.uid === currentUserId ? `
+         <span class="cap-btn cap-copy" onclick="copyCaption('${escAttr(c.text)}')">📋 Copy</span>
+         <span class="cap-btn cap-edit" onclick="editCaption('${c.id}','${escAttr(c.text)}')">✏️ Edit</span>
+         <span class="cap-btn cap-delete" onclick="deleteCaption('${c.id}')">🗑️ Delete</span>` : '');
+    return `<div class="caption-card">
+      <div class="caption-num">📌 Caption Number: ${String(c.num).padStart(2,'0')}</div>
+      <div class="caption-text">💬 ${escHtml(c.text)}</div>
+      <div class="caption-time">🕒 ${c.time}</div>
+      <div class="caption-actions">${actions}</div>
+    </div>`;
+  }).join('');
 }
 
-function closePopup(id) {
-  document.getElementById(id).style.display = 'none';
+async function saveCaption() {
+  const inp  = document.getElementById('newCaptionInput');
+  const text = inp.value.trim();
+  if (!text) { showToast('⚠️ Caption ফাঁকা রাখা যাবে না!'); return; }
+  try {
+    const res  = await fetch(`${API_BASE}/caption`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'add', uid:currentUserId, text})
+    });
+    const data = await res.json();
+    if (data.ok) { inp.value = ''; showToast('✅ Caption Saved!'); loadCaptions(); }
+    else showToast('❌ Failed to save');
+  } catch(e) { showToast('❌ Network error'); }
 }
 
-function goToReceived() {
-  closePopup('successPopup');
-  closePopup('replyPopup');
-  showSection('receiveHistory');
+async function deleteCaption(id) {
+  if (!confirm('এই Caption Delete করতে চান?')) return;
+  try {
+    const res  = await fetch(`${API_BASE}/caption`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'delete', uid:currentUserId, id})
+    });
+    const data = await res.json();
+    if (data.ok) { showToast('🗑️ Caption Deleted'); loadCaptions(); }
+  } catch(e) {}
 }
 
-// ===== TOAST =====
-function showToast(msg) {
-  const existing = document.querySelector('.toast');
-  if (existing) existing.remove();
-
-  const t = document.createElement('div');
-  t.className = 'toast';
-  t.textContent = msg;
-  t.style.cssText = `
-    position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
-    background:linear-gradient(90deg,#7c3aed,#ec4899);
-    color:#fff;padding:10px 20px;border-radius:30px;
-    font-size:0.85rem;font-weight:700;z-index:99999;
-    box-shadow:0 4px 20px rgba(124,58,237,0.5);
-    font-family:'Hind Siliguri',sans-serif;
-    animation:fadeIn 0.3s ease;
-    white-space:nowrap;max-width:90vw;text-align:center;
-  `;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 3000);
+async function editCaption(id, oldText) {
+  const newText = prompt('Caption Edit করুন:', oldText);
+  if (!newText || newText.trim() === oldText) return;
+  try {
+    const res  = await fetch(`${API_BASE}/caption`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'edit', uid:currentUserId, id, text:newText.trim()})
+    });
+    const data = await res.json();
+    if (data.ok) { showToast('✅ Caption Updated!'); loadCaptions(); }
+  } catch(e) {}
 }
 
-// ===== UTILS =====
-function nowStr() {
-  return new Date().toLocaleString('bn-BD', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    hour12: true
+function copyCaption(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!')).catch(() => showToast('❌ Copy failed'));
+}
+
+// ─── NOTIFICATIONS ────────────────────────────────
+function requestNotificationPermission() {
+  closePopup('notifPopup');
+  Notification.requestPermission().then(perm => {
+    if (perm === 'granted') { showToast('🔔 Notifications Enabled!'); saveNotifStatus(true); }
+    else showToast('🔕 Notification denied');
   });
 }
 
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/\n/g, '<br>');
+async function saveNotifStatus(allowed) {
+  try {
+    await fetch(`${API_BASE}/user`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({action:'updateNotif', uid:currentUserId, notifAllowed:allowed})
+    });
+  } catch(e) {}
 }
 
-// ===== SERVICE WORKER MESSAGE LISTENER =====
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'NEW_REPLY') {
-      checkNewReplies();
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+}
+
+// ─── POLLING ──────────────────────────────────────
+function startPolling() {
+  pollInterval = setInterval(pollNewMessages, 15000);
+}
+
+async function pollNewMessages() {
+  if (!currentUserId) return;
+  try {
+    const res  = await fetch(`${API_BASE}/send?uid=${currentUserId}&type=received&poll=1`);
+    const data = await res.json();
+    if (data.newMessage) {
+      showReplyPopup(data.newMessage);
+      loadReceivedHistory();
+      if (Notification.permission === 'granted') {
+        new Notification('💌 চিঠি পাঠাও', {
+          body: 'You Have Received New Notification From Admin – Click To Open',
+          icon: '/icon-192.png'
+        });
+      }
     }
+    if (data.broadcast) showBroadcastPopup(data.broadcast);
+    if (data.newCaption) showNewCaptionPopup(data.newCaption);
+  } catch(e) {}
+}
+
+// ─── POPUPS ───────────────────────────────────────
+function showReplyPopup(msg) {
+  const shown = localStorage.getItem(`cpt_seen_${msg.msgId}`);
+  if (shown) return;
+  localStorage.setItem(`cpt_seen_${msg.msgId}`, '1');
+  document.getElementById('replyPopupMsg').textContent  = msg.message;
+  document.getElementById('replyPopupTime').textContent = '🕒 ' + msg.time;
+  showPopup('replyPopup');
+}
+
+function showBroadcastPopup(bc) {
+  document.getElementById('broadcastMsg').textContent  = bc.message;
+  document.getElementById('broadcastTime').textContent = '🕒 ' + bc.time;
+  showPopup('broadcastPopup');
+  setTimeout(() => closePopup('broadcastPopup'), 5000);
+}
+
+function showNewCaptionPopup(cap) {
+  document.getElementById('newCaptionMsg').textContent  = cap.text;
+  document.getElementById('newCaptionTime').textContent = '🕒 ' + cap.time;
+  showPopup('newCaptionPopup');
+  setTimeout(() => closePopup('newCaptionPopup'), 5000);
+}
+
+function checkPendingPopups() {
+  const bc = localStorage.getItem('cpt_pending_bc');
+  if (bc) { try { showBroadcastPopup(JSON.parse(bc)); localStorage.removeItem('cpt_pending_bc'); } catch(e) {} }
+}
+
+function checkReply() {
+  closePopup('sentPopup');
+  openSection('receivedHistory');
+}
+
+function clickToReply() {
+  closePopup('replyPopup');
+  document.getElementById('msgBox').focus();
+  document.getElementById('msgBox').scrollIntoView({behavior:'smooth'});
+}
+
+// ─── SECTION NAVIGATION ───────────────────────────
+function openSection(name) {
+  closeDropdown();
+  const map = {
+    sendHistory:     'sendHistoryModal',
+    receivedHistory: 'receivedHistoryModal',
+    captionBox:      'captionBoxModal',
+    myProfile:       'myProfileModal',
+    helpSection:     'helpSectionModal'
+  };
+  const modalId = map[name];
+  if (!modalId) return;
+  if (name === 'myProfile') renderProfile();
+  if (name === 'sendHistory') loadSendHistory();
+  if (name === 'receivedHistory') loadReceivedHistory();
+  if (name === 'captionBox') loadCaptions();
+  document.getElementById(modalId).classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSection(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+function showPopup(id) {
+  document.getElementById(id).classList.remove('hidden');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePopup(id) {
+  document.getElementById(id).classList.add('hidden');
+  document.body.style.overflow = '';
+}
+
+// ─── DROPDOWN ─────────────────────────────────────
+function toggleDropdown() {
+  const dd = document.getElementById('homeDropdown');
+  dropdownOpen = !dropdownOpen;
+  dd.classList.toggle('hidden', !dropdownOpen);
+}
+
+function closeDropdown() {
+  document.getElementById('homeDropdown').classList.add('hidden');
+  dropdownOpen = false;
+}
+
+function setupDropdownClose() {
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#homeDropdown') && !e.target.closest('#homeMenuBtn')) closeDropdown();
+  });
+}
+
+// ─── CHAR COUNTER ─────────────────────────────────
+function setupCharCounter() {
+  document.getElementById('msgBox').addEventListener('input', function() {
+    document.getElementById('charCount').textContent = this.value.length;
+  });
+}
+
+// ─── TOAST ────────────────────────────────────────
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add('hidden'), 3000);
+}
+
+// ─── HELPERS ──────────────────────────────────────
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(s) {
+  return String(s).replace(/'/g,"\\'").replace(/\n/g,'\\n');
+}
+function getBDTime() {
+  return new Date().toLocaleString('en-GB', {
+    timeZone:'Asia/Dhaka', hour12:true,
+    day:'2-digit', month:'2-digit', year:'numeric',
+    hour:'2-digit', minute:'2-digit'
   });
 }
