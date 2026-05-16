@@ -1,20 +1,8 @@
-/* ===== api/caption.js — Vercel Serverless ===== */
-const { readDB, writeDB, getBDTime } = require('./database');
+// ===== CAPTION API =====
+const { readDB, writeDB, getBDTime, genId, invalidateCache } = require('./database');
+const { sendTelegramMessage } = require('../bot/webhook');
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID  = process.env.ADMIN_ID  || '6048050987';
-const TG_API    = `https://api.telegram.org/bot${BOT_TOKEN}`;
-
-async function sendTg(chatId, text) {
-  try {
-    await fetch(`${TG_API}/sendMessage`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ chat_id:chatId, text, parse_mode:'HTML' })
-    });
-  } catch(e) {}
-}
-
-module.exports = async function handler(req, res) {
+module.exports = async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -22,68 +10,105 @@ module.exports = async function handler(req, res) {
 
   try {
     const db = await readDB();
-    if (!db.captions) db.captions = [];
+    db.captions = db.captions || [];
 
-    // ── GET ──
     if (req.method === 'GET') {
-      const { uid } = req.query;
-      // Return admin captions + this user's captions
-      const visible = db.captions.filter(c => !c.deleted && (c.source === 'admin' || c.uid === uid));
+      const { userId } = req.query;
+      // Return admin captions + user's own captions
+      const visible = db.captions.filter(c =>
+        c.addedBy === 'admin' || c.addedBy === userId
+      );
       return res.json({ captions: visible });
     }
 
-    // ── POST ──
     if (req.method === 'POST') {
-      const { action, uid, text, id } = req.body || {};
+      const { action, userId, text, captionId } = req.body;
 
       if (action === 'add') {
-        const time   = getBDTime();
-        const capId  = `cap_${Date.now()}`;
-        const num    = db.nextCaptionNum || 1;
-        const cap    = { id: capId, num, text, uid, source: 'user', time, deleted: false };
-        db.captions.push(cap);
-        db.nextCaptionNum = num + 1;
+        if (!text) return res.status(400).json({ error: 'Text required' });
+        const now = getBDTime();
+        const userCaptions = db.captions.filter(c => c.addedBy === userId);
+        const capNumber = String(userCaptions.length + 1).padStart(2, '0');
+        const newCap = {
+          id: genId(), text, addedBy: userId,
+          number: capNumber, time: now
+        };
+        db.captions.push(newCap);
+        db.newCaption = { id: newCap.id, text, time: now };
         await writeDB(db);
-        // Notify admin
-        await sendTg(ADMIN_ID, `🚨 <b>Alert: New Caption Added!</b>\n\n📌 <b>Caption Number:</b> ${String(num).padStart(2,'0')}\n🆔 <b>Added By User:</b> ${uid}\n💬 <b>Caption:</b>\n${text}\n\n🕒 <b>Added Time:</b> ${time}`);
-        return res.json({ ok: true, cap });
+        invalidateCache();
+
+        // Notify bot
+        const adminTotalCaps = db.captions.filter(c => c.addedBy === userId).length;
+        const botMsg =
+`🚨 Alert: New Caption Added!
+
+📌 Caption Number: ${capNumber}
+
+🆔 Added By User: ${userId}
+
+💬 Caption:
+${text}
+
+🕒 Added Time & Date:
+${now}`;
+        await sendTelegramMessage(botMsg);
+        return res.json({ success: true, caption: newCap });
       }
 
       if (action === 'edit') {
-        const cap = db.captions.find(c => c.id === id && c.uid === uid);
-        if (!cap) return res.json({ ok: false, error: 'Not found or unauthorized' });
+        const cap = db.captions.find(c => c.id === captionId && c.addedBy === userId);
+        if (!cap) return res.status(403).json({ error: 'Not found or not owner' });
         cap.text = text;
         cap.editedAt = getBDTime();
         await writeDB(db);
-        return res.json({ ok: true });
+        invalidateCache();
+        return res.json({ success: true });
       }
 
       if (action === 'delete') {
-        const cap = db.captions.find(c => c.id === id && (c.uid === uid || uid === ADMIN_ID));
-        if (!cap) return res.json({ ok: false, error: 'Not found' });
-        cap.deleted = true;
+        const idx = db.captions.findIndex(c => c.id === captionId && c.addedBy === userId);
+        if (idx === -1) return res.status(403).json({ error: 'Not found or not owner' });
+        db.captions.splice(idx, 1);
         await writeDB(db);
-        return res.json({ ok: true });
+        invalidateCache();
+        return res.json({ success: true });
       }
 
-      // Admin add (from bot)
-      if (action === 'adminAdd') {
-        const time  = getBDTime();
-        const capId = `cap_admin_${Date.now()}`;
-        const num   = db.nextCaptionNum || 1;
-        const cap   = { id: capId, num, text, uid: 'admin', source: 'admin', time, deleted: false };
-        db.captions.push(cap);
-        db.nextCaptionNum = num + 1;
+      // Admin: add caption
+      if (action === 'admin_add') {
+        const now = getBDTime();
+        const adminCaps = db.captions.filter(c => c.addedBy === 'admin');
+        const newCap = {
+          id: genId(), text, addedBy: 'admin',
+          number: String(adminCaps.length + 1).padStart(2, '0'), time: now
+        };
+        db.captions.push(newCap);
+        db.newCaption = { id: newCap.id, text, time: now };
         await writeDB(db);
-        return res.json({ ok: true, cap });
+        invalidateCache();
+        return res.json({ success: true, caption: newCap });
       }
 
-      return res.json({ error: 'Unknown action' });
+      if (action === 'admin_edit') {
+        const cap = db.captions.find(c => c.id === captionId);
+        if (!cap) return res.status(404).json({ error: 'Not found' });
+        cap.text = text; cap.editedAt = getBDTime();
+        await writeDB(db);
+        invalidateCache();
+        return res.json({ success: true });
+      }
+
+      if (action === 'admin_delete') {
+        const idx = db.captions.findIndex(c => c.id === captionId);
+        if (idx !== -1) { db.captions.splice(idx, 1); await writeDB(db); invalidateCache(); }
+        return res.json({ success: true });
+      }
     }
 
-    return res.status(405).json({ error: 'Method not allowed' });
-  } catch(e) {
-    console.error('Caption API error:', e);
-    return res.status(500).json({ error: 'Internal error' });
+    res.status(405).json({ error: 'Method not allowed' });
+  } catch (e) {
+    console.error('Caption API Error:', e);
+    res.status(500).json({ error: 'Server error' });
   }
 };
