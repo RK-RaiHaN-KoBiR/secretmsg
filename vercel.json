@@ -1,24 +1,15 @@
 {
   "version": 2,
-  "name": "chithi-pathao",
   "builds": [
     { "src": "api/*.js", "use": "@vercel/node" },
-    { "src": "bot/bot.js", "use": "@vercel/node" },
     { "src": "public/**", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/user", "dest": "/api/user.js" },
     { "src": "/api/send", "dest": "/api/send.js" },
+    { "src": "/api/user", "dest": "/api/user.js" },
     { "src": "/api/caption", "dest": "/api/caption.js" },
     { "src": "/api/broadcast", "dest": "/api/broadcast.js" },
-    { "src": "/api/webhook", "dest": "/api/webhook.js" },
+    { "src": "/api/botwebhook", "dest": "/api/botwebhook.js" },
     { "src": "/(.*)", "dest": "/public/$1" }
-  ],
-  "env": {
-    "BOT_TOKEN": "@bot_token",
-    "ADMIN_ID": "@admin_id",
-    "JSONBIN_BIN_ID": "@jsonbin_bin_id",
-    "JSONBIN_MASTER_KEY": "@jsonbin_master_key",
-    "JSONBIN_ACCESS_KEY": "@jsonbin_access_key"
-  }
+  ]
 }

@@ -1,20 +1,17 @@
 {
-  "name": "chithi-pathao-secret-message",
+  "name": "chithi-pathao",
   "version": "1.0.0",
-  "description": "Anonymous Secret Message Platform - চিঠি পাঠাও",
-  "main": "bot/bot.js",
+  "description": "Secret Anonymous Messaging Platform — চিঠি পাঠাও",
+  "main": "api/botwebhook.js",
   "scripts": {
-    "start": "node bot/bot.js",
-    "dev": "node bot/bot.js",
-    "setup-webhook": "node bot/setWebhook.js"
+    "dev": "node server.js",
+    "start": "node server.js"
   },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "node-fetch": "^3.3.2"
   },
-  "engines": {
-    "node": ">=18.x"
-  },
-  "keywords": ["telegram-bot", "anonymous-message", "secret-message", "vercel"],
+  "keywords": ["anonymous", "messaging", "telegram", "bot"],
   "author": "RK-RaiHaN-KoBiR",
   "license": "MIT"
 }
