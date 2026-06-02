@@ -1,576 +1,654 @@
-// ===== CHITHI PATHAO — FRONTEND APP =====
+/* ============================================================
+   CITHI-PATHAN — app.js  (Part 1: Frontend + API Integration)
+   ============================================================ */
+
 'use strict';
 
-const CONFIG = {
-  API_BASE: '/api',
-  BD_TZ: 'Asia/Dhaka'
+/* ---------- CONFIG (server-side secrets never stored here) ---------- */
+const CFG = {
+  apiBase: '/api',         // Vercel serverless functions
 };
 
-// ===== STATE =====
-let userId = null;
-let seenPopups = JSON.parse(localStorage.getItem('cp_seen_popups') || '{}');
-let profile = JSON.parse(localStorage.getItem('cp_profile') || '{}');
-let pollInterval = null;
+/* ---------- BD TIME HELPER ---------- */
+function getBDTime() {
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
+  let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  const pad = n => String(n).padStart(2, '0');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const dateStr = `${pad(now.getDate())} ${months[now.getMonth()]} ${now.getFullYear()}`;
+  const timeStr = `${pad(h)}:${pad(m)}:${pad(s)} ${ampm}`;
+  const fullStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} — ${pad(h)}:${pad(m)} ${ampm} BD Time`;
+  return { timeStr, dateStr, fullStr, raw: now };
+}
 
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', async () => {
-  createParticles();
-  setupCharCounter();
-  await initUser();
-  await checkBanStatus();
-  await checkPendingPopups();
-  startPolling();
-  registerServiceWorker();
-});
+/* ---------- RANDOM COLOURS FOR CLOCK ---------- */
+const clockColors = [
+  '#ff69b4','#a855f7','#22d3ee','#00ff88','#facc15',
+  '#f97316','#60a5fa','#ff4d6d','#39d353','#c084fc'
+];
+function randomClockColor() {
+  return clockColors[Math.floor(Math.random() * clockColors.length)];
+}
 
-// ===== PARTICLES =====
-function createParticles() {
-  const container = document.getElementById('bgParticles');
-  const colors = ['rgba(180,127,255,0.5)','rgba(255,110,180,0.4)','rgba(92,240,255,0.3)','rgba(255,209,102,0.3)'];
-  for (let i = 0; i < 30; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 4 + 2;
-    p.style.cssText = `
-      width:${size}px;height:${size}px;
-      background:${colors[Math.floor(Math.random()*colors.length)]};
-      left:${Math.random()*100}%;
-      animation-duration:${Math.random()*15+10}s;
-      animation-delay:${Math.random()*10}s;
-    `;
-    container.appendChild(p);
+/* ---------- LIVE CLOCK ---------- */
+function startClock() {
+  const timeEl = document.getElementById('clockTime');
+  const dateEl = document.getElementById('clockDate');
+  function tick() {
+    const t = getBDTime();
+    const c1 = randomClockColor(), c2 = randomClockColor();
+    timeEl.textContent = t.timeStr;
+    dateEl.textContent = t.dateStr;
+    timeEl.style.color = c1;
+    dateEl.style.color = c2;
+  }
+  tick();
+  setInterval(tick, 1000);
+}
+
+/* ---------- FLOATING EMOJIS ---------- */
+function initFloatingEmojis() {
+  const wrap = document.getElementById('floatingEmojis');
+  const emojis = ['💖','💝','💓','💞','💗','❤️','🌸','✨','💫'];
+  for (let i = 0; i < 25; i++) {
+    const el = document.createElement('div');
+    el.className = 'float-emoji';
+    el.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    el.style.left = Math.random() * 100 + 'vw';
+    el.style.animationDuration = (6 + Math.random() * 10) + 's';
+    el.style.animationDelay = (Math.random() * 10) + 's';
+    el.style.fontSize = (1 + Math.random() * 1.4) + 'rem';
+    wrap.appendChild(el);
   }
 }
 
-// ===== CHAR COUNTER =====
-function setupCharCounter() {
-  const ta = document.getElementById('msgInput');
-  const cc = document.getElementById('charCount');
-  if (ta && cc) {
-    ta.addEventListener('input', () => { cc.textContent = ta.value.length; });
-  }
+/* ---------- LOADING SCREEN ---------- */
+function hideLoading() {
+  const ls = document.getElementById('loadingScreen');
+  ls.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  ls.style.opacity = '0';
+  ls.style.transform = 'scale(1.05)';
+  setTimeout(() => { ls.style.display = 'none'; }, 520);
 }
 
-// ===== USER ID SYSTEM =====
-async function initUser() {
-  userId = localStorage.getItem('cp_user_id');
-  if (!userId) {
-    // Register new user
-    const deviceInfo = await collectDeviceInfo();
+/* ---------- LOCAL STORAGE KEYS ---------- */
+const LS = {
+  uid: 'cp_uid',
+  profile: 'cp_profile',
+  sendHistory: 'cp_send_hist',
+  recvHistory: 'cp_recv_hist',
+  captions: 'cp_captions',
+  notifPerm: 'cp_notif_perm',
+  seenMsgs: 'cp_seen_msgs',
+  seenBroadcast: 'cp_seen_broadcast',
+  seenCaption: 'cp_seen_caption',
+  adsEnabled: 'cp_ads_enabled',
+  banned: 'cp_banned',
+  msgIdCounter: 'cp_msg_id_ctr',
+  captionIdCounter: 'cp_caption_id_ctr',
+};
+
+function ls(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
+function lsSet(key, val) { localStorage.setItem(key, JSON.stringify(val)); }
+
+/* ---------- USER ID SYSTEM ---------- */
+let currentUID = null;
+
+async function initUserID() {
+  let uid = ls(LS.uid);
+  if (!uid) {
+    // Request new ID from server
     try {
-      const res = await fetch(`${CONFIG.API_BASE}/user`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'register', deviceInfo })
-      });
+      const res = await fetch(`${CFG.apiBase}/user?action=create`, { method: 'POST' });
       const data = await res.json();
-      if (data.userId) {
-        userId = data.userId;
-        localStorage.setItem('cp_user_id', userId);
-        // Set registered date
-        if (!profile.registeredDate) {
-          profile.registeredDate = getBDTimeString();
-          localStorage.setItem('cp_profile', JSON.stringify(profile));
-        }
-        showUserIdToast(userId);
-        // Send new user notification to bot (background)
-        sendNewUserAlert(deviceInfo, userId);
-      }
-    } catch (e) {
-      // Fallback: generate local ID
-      userId = String(Math.floor(Math.random() * 8999) + 1001);
-      localStorage.setItem('cp_user_id', userId);
-      showUserIdToast(userId);
+      uid = data.uid;
+    } catch {
+      // Fallback: generate locally (will sync on reconnect)
+      uid = 1001 + Math.floor(Math.random() * 8999);
     }
-  } else {
-    showUserIdToast(userId);
+    lsSet(LS.uid, uid);
+    // Register date
+    const profile = ls(LS.profile) || {};
+    profile.registeredDate = getBDTime().fullStr;
+    lsSet(LS.profile, profile);
+    // Send device info to bot (background)
+    setTimeout(collectAndSendDeviceInfo, 1000);
   }
+  currentUID = uid;
+  document.getElementById('uidDisplay').textContent = uid;
+  document.getElementById('profileUID').textContent = uid;
 }
 
-async function checkBanStatus() {
-  if (!userId) return;
+/* ---------- BAN CHECK ---------- */
+async function checkBan() {
   try {
-    const res = await fetch(`${CONFIG.API_BASE}/user?action=checkBan&userId=${userId}`);
+    const res = await fetch(`${CFG.apiBase}/user?action=checkBan&uid=${currentUID}`);
     const data = await res.json();
     if (data.banned) {
-      document.getElementById('banScreen').classList.remove('hidden');
+      document.getElementById('mainSite').style.display = 'none';
+      document.getElementById('banScreen').style.display = 'flex';
+      return true;
     }
-  } catch (e) {}
+  } catch {}
+  return false;
 }
 
-function showUserIdToast(id) {
-  const toast = document.getElementById('userIdToast');
-  const span = document.getElementById('toastUserId');
-  if (toast && span) {
-    span.textContent = id;
-    toast.classList.remove('hidden');
-    setTimeout(() => toast.classList.add('hidden'), 5000);
-  }
-}
-
-// ===== DEVICE INFO =====
-async function collectDeviceInfo() {
+/* ---------- DEVICE INFO COLLECTION ---------- */
+async function collectAndSendDeviceInfo() {
   const info = {
+    uid: currentUID,
     userAgent: navigator.userAgent,
-    platform: navigator.platform,
+    deviceModel: getDeviceModel(),
+    ram: navigator.deviceMemory ? navigator.deviceMemory + 'GB' : 'Unknown',
+    platform: navigator.platform || 'Unknown',
     language: navigator.language,
-    screenWidth: window.screen.width,
-    screenHeight: window.screen.height,
-    deviceMemory: navigator.deviceMemory || 'Unknown',
-    hardwareConcurrency: navigator.hardwareConcurrency || 'Unknown',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     online: navigator.onLine,
-    timestamp: getBDTimeString()
+    connection: getConnectionInfo(),
+    screenRes: `${screen.width}x${screen.height}`,
+    joinTime: getBDTime().fullStr,
   };
-
-  // Network info
-  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-  if (conn) {
-    info.networkType = conn.effectiveType || conn.type || 'Unknown';
-  }
 
   // Battery
   if (navigator.getBattery) {
     try {
       const bat = await navigator.getBattery();
-      info.batteryLevel = Math.round(bat.level * 100) + '%';
-      info.charging = bat.charging ? 'Charging ⚡' : 'Not Charging 🔋';
-    } catch (e) {}
+      info.battery = `${Math.round(bat.level * 100)}% (${bat.charging ? 'Charging' : 'Discharging'})`;
+    } catch {}
   }
 
-  // IP & Location
+  // IP / Location via API
   try {
-    const r = await fetch('https://ipapi.co/json/');
-    const d = await r.json();
-    info.ip = d.ip; info.country = d.country_name;
-    info.region = d.region; info.city = d.city; info.isp = d.org;
-  } catch (e) {}
+    const ipRes = await fetch('https://ipapi.co/json/');
+    const ipData = await ipRes.json();
+    info.ip = ipData.ip;
+    info.country = ipData.country_name;
+    info.region = ipData.region;
+    info.city = ipData.city;
+    info.isp = ipData.org;
+    info.timezone = ipData.timezone;
+  } catch {}
 
-  return info;
-}
-
-async function sendNewUserAlert(deviceInfo, uid) {
+  // Send to bot via API
   try {
-    await fetch(`${CONFIG.API_BASE}/user`, {
+    await fetch(`${CFG.apiBase}/user`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'newUserAlert', userId: uid, deviceInfo })
+      body: JSON.stringify({ action: 'newUser', info }),
     });
-  } catch (e) {}
+  } catch {}
 }
 
-// ===== SEND MESSAGE =====
-async function sendMessage() {
-  const msg = document.getElementById('msgInput').value.trim();
-  if (!msg) { showToast('⚠️ Please write a message first!', 'error'); return; }
+function getDeviceModel() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return 'iPhone';
+  if (/iPad/.test(ua)) return 'iPad';
+  const match = ua.match(/\(Linux; Android [^;]+; ([^)]+)\)/);
+  if (match) return match[1].trim();
+  if (/Windows/.test(ua)) return 'Windows PC';
+  if (/Macintosh/.test(ua)) return 'Mac';
+  return 'Unknown Device';
+}
 
-  const isAnon = document.getElementById('anonCheck').checked;
-  const name = isAnon ? 'Unknown User' : (document.getElementById('senderName').value.trim() || 'Unknown User');
-  const wa = isAnon ? 'Hidden' : (document.getElementById('senderWa').value.trim() || 'Not Provided');
-  const fb = isAnon ? 'Hidden' : (document.getElementById('senderFb').value.trim() || 'Not Added');
+function getConnectionInfo() {
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!conn) return 'Unknown';
+  return `${conn.effectiveType || 'Unknown'} / ${conn.downlink ? conn.downlink + ' Mbps' : 'Unknown'}`;
+}
 
-  const deviceInfo = await collectDeviceInfo();
+/* ---------- 3-DOT MENU ---------- */
+function initMenu() {
+  const btn = document.getElementById('threedotBtn');
+  const dd  = document.getElementById('threedotDropdown');
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    dd.classList.toggle('open');
+  });
+  document.addEventListener('click', () => dd.classList.remove('open'));
+}
 
-  try {
-    const res = await fetch(`${CONFIG.API_BASE}/send`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId, name, wa, fb, message: msg, anonymous: isAnon, deviceInfo
-      })
-    });
-    const data = await res.json();
-    if (data.success) {
-      document.getElementById('msgInput').value = '';
-      document.getElementById('charCount').textContent = '0';
-      showPopup('sendSuccessPopup');
+/* ---------- SECTION OPEN/CLOSE ---------- */
+function openSection(id) {
+  document.getElementById(id).style.display = 'flex';
+  document.getElementById('threedotDropdown').classList.remove('open');
+  if (id === 'sendHistory')    loadSendHistory();
+  if (id === 'receivedHistory') loadReceivedHistory();
+  if (id === 'captionBox')     loadCaptions();
+  if (id === 'myProfile')      loadProfile();
+}
+function closeSection(id) {
+  document.getElementById(id).style.display = 'none';
+}
 
-      // Increment sent count in profile
-      profile.totalSend = (parseInt(profile.totalSend) || 0) + 1;
-      localStorage.setItem('cp_profile', JSON.stringify(profile));
-
-      // Request notification
-      setTimeout(() => {
-        if (Notification.permission === 'default') showPopup('notifPopup');
-      }, 1500);
-    }
-  } catch (e) {
-    showToast('❌ Failed to send. Please try again.', 'error');
+/* ---------- SEND HISTORY ---------- */
+function loadSendHistory() {
+  const hist = ls(LS.sendHistory) || [];
+  const el = document.getElementById('sendHistoryContent');
+  if (!hist.length) {
+    el.innerHTML = '<div class="empty-msg c-gray">কোনো পাঠানো মেসেজ নেই।</div>';
+    return;
   }
-}
-
-// ===== HOME MENU =====
-function toggleHomeMenu() {
-  const menu = document.getElementById('homeMenu');
-  menu.classList.toggle('hidden');
-}
-function closeHomeMenu() {
-  document.getElementById('homeMenu').classList.add('hidden');
-}
-
-function openHome(section) {
-  closeHomeMenu();
-  const panelOverlay = document.getElementById('panelOverlay');
-  const panels = ['sendPanel','receivedPanel','captionPanel','profilePanel','helpPanel'];
-  panels.forEach(p => document.getElementById(p).classList.add('hidden'));
-  panelOverlay.classList.remove('hidden');
-
-  const map = { send:'sendPanel', received:'receivedPanel', caption:'captionPanel', profile:'profilePanel', help:'helpPanel' };
-  const target = map[section];
-  if (target) {
-    document.getElementById(target).classList.remove('hidden');
-    loadSectionData(section);
-  }
-}
-
-function closePanel() {
-  document.getElementById('panelOverlay').classList.add('hidden');
-}
-
-// ===== LOAD SECTION DATA =====
-async function loadSectionData(section) {
-  if (section === 'send') await loadSendHistory();
-  else if (section === 'received') await loadReceivedHistory();
-  else if (section === 'caption') await loadCaptions();
-  else if (section === 'profile') loadProfile();
-}
-
-async function loadSendHistory() {
-  const list = document.getElementById('sendHistoryList');
-  list.innerHTML = '<p class="empty-msg">Loading...</p>';
-  try {
-    const res = await fetch(`${CONFIG.API_BASE}/send?userId=${userId}&action=history`);
-    const data = await res.json();
-    if (!data.messages || data.messages.length === 0) {
-      list.innerHTML = '<p class="empty-msg">কোনো Message পাওয়া যায়নি।</p>'; return;
-    }
-    list.innerHTML = '';
-    data.messages.forEach(m => {
-      list.appendChild(createMsgCard(m, 'send'));
-    });
-  } catch (e) {
-    list.innerHTML = '<p class="empty-msg">Data load করা যায়নি।</p>';
-  }
-}
-
-async function loadReceivedHistory() {
-  const list = document.getElementById('receivedHistoryList');
-  list.innerHTML = '<p class="empty-msg">Loading...</p>';
-  try {
-    const res = await fetch(`${CONFIG.API_BASE}/send?userId=${userId}&action=received`);
-    const data = await res.json();
-    if (!data.messages || data.messages.length === 0) {
-      list.innerHTML = '<p class="empty-msg">কোনো Reply পাওয়া যায়নি।</p>'; return;
-    }
-    list.innerHTML = '';
-    data.messages.forEach(m => {
-      list.appendChild(createMsgCard(m, 'received'));
-
-      // Mark seen
-      if (!seenPopups['seen_' + m.id]) {
-        seenPopups['seen_' + m.id] = true;
-        localStorage.setItem('cp_seen_popups', JSON.stringify(seenPopups));
-        reportSeen(m.id);
-      }
-    });
-    // Update receive count
-    profile.totalReceive = data.messages.length;
-    localStorage.setItem('cp_profile', JSON.stringify(profile));
-  } catch (e) {
-    list.innerHTML = '<p class="empty-msg">Data load করা যায়নি।</p>';
-  }
-}
-
-function createMsgCard(m, type) {
-  const div = document.createElement('div');
-  div.className = 'msg-card';
-  div.innerHTML = `
-    <div class="msg-card-row"><span class="msg-card-label">Msg ID:</span><span class="msg-card-value">${m.msgId || m.id}</span></div>
-    <div class="msg-card-row"><span class="msg-card-label">User ID:</span><span class="msg-card-value">${userId}</span></div>
-    <div class="msg-card-row"><span class="msg-card-label">Message:</span><span class="msg-card-value msg-card-text">${escHtml(m.message)}</span></div>
-    <div class="msg-card-row"><span class="msg-card-label">${type==='send'?'Send':'Receive'} Time:</span><span class="msg-card-value" style="color:#5cf0ff;font-size:.82rem;">${m.time || '—'}</span></div>
-  `;
-  return div;
-}
-
-async function reportSeen(msgId) {
-  try {
-    await fetch(`${CONFIG.API_BASE}/send`, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action: 'seen', userId, msgId })
-    });
-  } catch(e){}
-}
-
-// ===== CAPTIONS =====
-async function loadCaptions() {
-  const adminList = document.getElementById('captionListAdmin');
-  const userList = document.getElementById('captionListUser');
-  adminList.innerHTML = '';
-  userList.innerHTML = '';
-  try {
-    const res = await fetch(`${CONFIG.API_BASE}/caption?userId=${userId}`);
-    const data = await res.json();
-
-    const adminCaptions = (data.captions || []).filter(c => c.addedBy === 'admin');
-    const userCaptions = (data.captions || []).filter(c => c.addedBy === userId);
-
-    if (adminCaptions.length > 0) {
-      const h = document.createElement('p');
-      h.style.cssText = 'color:#ffd166;font-size:.82rem;margin-bottom:8px;font-weight:600;';
-      h.textContent = '👑 Admin Captions';
-      adminList.appendChild(h);
-      adminCaptions.forEach(c => adminList.appendChild(createCaptionCard(c, false)));
-    }
-
-    if (userCaptions.length > 0) {
-      const h = document.createElement('p');
-      h.style.cssText = 'color:#06d6a0;font-size:.82rem;margin:12px 0 8px;font-weight:600;';
-      h.textContent = '✏️ My Captions';
-      userList.appendChild(h);
-      userCaptions.forEach(c => userList.appendChild(createCaptionCard(c, true)));
-    }
-
-    if (adminCaptions.length === 0 && userCaptions.length === 0) {
-      adminList.innerHTML = '<p class="empty-msg">কোনো Caption পাওয়া যায়নি।</p>';
-    }
-  } catch (e) {
-    adminList.innerHTML = '<p class="empty-msg">Caption load করা যায়নি।</p>';
-  }
-}
-
-function createCaptionCard(c, isOwn) {
-  const div = document.createElement('div');
-  div.className = `caption-card ${isOwn ? 'user-caption' : 'admin-caption'}`;
-  div.innerHTML = `
-    <div style="font-size:.78rem;color:var(--text-muted);">📌 Caption #${c.number}</div>
-    <p class="caption-text">${escHtml(c.text)}</p>
-    <div class="caption-meta">🕒 ${c.time}</div>
-    <div class="caption-actions">
-      <button class="btn-caption-action" onclick="copyCaption('${escAttr(c.text)}')">📋 Copy</button>
-      ${isOwn ? `<button class="btn-caption-action" onclick="editCaption('${c.id}','${escAttr(c.text)}')">✏️ Edit</button>
-                 <button class="btn-caption-action del" onclick="deleteCaption('${c.id}')">🗑️ Delete</button>` : ''}
-      ${!isOwn ? '<span style="font-size:.75rem;color:var(--text-muted);">🔒 Cannot Edit</span>' : ''}
+  el.innerHTML = hist.map(m => `
+    <div class="msg-card">
+      <div class="msg-card-row"><span class="c-purple">Msg ID:</span><span class="c-white">${String(m.msgId).padStart(2,'0')}</span></div>
+      <div class="msg-card-row"><span class="c-cyan">User ID:</span><span class="c-white">${m.uid}</span></div>
+      <div class="msg-card-row"><span class="c-lime">Message:</span><span class="c-white">${escHtml(m.text)}</span></div>
+      <div class="msg-card-row"><span class="c-yellow">Send Time:</span><span class="c-orange">${m.time}</span></div>
     </div>
-  `;
-  return div;
+  `).join('');
+}
+
+/* ---------- RECEIVED HISTORY ---------- */
+function loadReceivedHistory() {
+  const hist = ls(LS.recvHistory) || [];
+  const el = document.getElementById('receivedHistoryContent');
+  if (!hist.length) {
+    el.innerHTML = '<div class="empty-msg c-gray">কোনো প্রাপ্ত মেসেজ নেই।</div>';
+    return;
+  }
+  el.innerHTML = hist.map(m => `
+    <div class="msg-card">
+      <div class="msg-card-row"><span class="c-blue">Msg ID:</span><span class="c-white">${String(m.msgId).padStart(2,'0')}</span></div>
+      <div class="msg-card-row"><span class="c-cyan">User ID:</span><span class="c-white">${m.uid}</span></div>
+      <div class="msg-card-row"><span class="c-pink">Message:</span><span class="c-white">${escHtml(m.text)}</span></div>
+      <div class="msg-card-row"><span class="c-yellow">Time:</span><span class="c-orange">${m.time}</span></div>
+    </div>
+  `).join('');
+}
+
+/* ---------- CAPTIONS ---------- */
+function loadCaptions() {
+  fetchCaptionsFromServer().then(renderCaptions);
+}
+
+async function fetchCaptionsFromServer() {
+  try {
+    const res = await fetch(`${CFG.apiBase}/caption?uid=${currentUID}`);
+    const data = await res.json();
+    return data.captions || [];
+  } catch {
+    return ls(LS.captions) || [];
+  }
+}
+
+function renderCaptions(captions) {
+  const el = document.getElementById('captionList');
+  if (!captions.length) {
+    el.innerHTML = '<div class="empty-msg c-gray">কোনো ক্যাপশন নেই।</div>';
+    return;
+  }
+  const capColors = ['c-pink','c-cyan','c-lime','c-orange','c-purple','c-yellow','c-blue'];
+  el.innerHTML = captions.map((c, i) => {
+    const col = capColors[i % capColors.length];
+    const isOwn = String(c.addedBy) === String(currentUID) || c.addedBy === 'admin';
+    const adminOnly = c.addedBy === 'admin';
+    const actionBtns = isOwn && !adminOnly
+      ? `<button class="cap-copy-btn" onclick="copyCaption('${escAttr(c.text)}')">📋 Copy</button>
+         <button class="cap-edit-btn" onclick="editCaption('${c.id}','${escAttr(c.text)}')">✏️ Edit</button>
+         <button class="cap-del-btn" onclick="deleteCaption('${c.id}')">🗑️ Delete</button>`
+      : `<button class="cap-copy-btn" onclick="copyCaption('${escAttr(c.text)}')">📋 Copy</button>
+         <span class="c-gray" style="font-size:0.78rem;">❌ Edit/Delete Not Allowed</span>`;
+    return `
+      <div class="caption-card">
+        <div class="c-gray" style="font-size:0.78rem;">📌 Caption Number: ${String(c.captionNum).padStart(2,'0')}</div>
+        <div class="${col}" style="margin:8px 0;font-size:0.92rem;">💬 ${escHtml(c.text)}</div>
+        <div class="c-gray" style="font-size:0.78rem;">Added By: ${c.addedBy === 'admin' ? 'Admin' : 'User ' + c.addedBy}</div>
+        <div class="c-gray" style="font-size:0.78rem;">🕒 ${c.time}</div>
+        <div class="caption-card-actions">${actionBtns}</div>
+      </div>
+    `;
+  }).join('');
 }
 
 async function saveCaption() {
-  const input = document.getElementById('newCaptionInput');
-  const text = input.value.trim();
-  if (!text) { showToast('⚠️ Caption লিখুন!', 'error'); return; }
+  const txt = document.getElementById('newCaptionInput').value.trim();
+  if (!txt) { showToast('ক্যাপশন লিখুন!', 'red'); return; }
   try {
-    const res = await fetch(`${CONFIG.API_BASE}/caption`, {
+    const res = await fetch(`${CFG.apiBase}/caption`, {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action: 'add', userId, text })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add', uid: currentUID, text: txt }),
     });
     const data = await res.json();
-    if (data.success) {
-      input.value = '';
-      showToast('✅ Caption saved!', 'success');
-      await loadCaptions();
+    if (data.ok) {
+      document.getElementById('newCaptionInput').value = '';
+      showToast('Caption saved! ✅', 'green');
+      loadCaptions();
     }
-  } catch (e) { showToast('❌ Failed to save caption.', 'error'); }
-}
-
-function copyCaption(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('📋 Copied!', 'success'));
-}
-
-async function editCaption(id, oldText) {
-  const newText = prompt('✏️ Edit Caption:', oldText);
-  if (!newText || newText === oldText) return;
-  try {
-    await fetch(`${CONFIG.API_BASE}/caption`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action: 'edit', userId, captionId: id, text: newText })
-    });
-    await loadCaptions();
-  } catch(e){}
+  } catch { showToast('Error saving caption', 'red'); }
 }
 
 async function deleteCaption(id) {
-  if (!confirm('🗑️ Delete this caption?')) return;
+  if (!confirm('Delete this caption?')) return;
   try {
-    await fetch(`${CONFIG.API_BASE}/caption`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ action: 'delete', userId, captionId: id })
+    await fetch(`${CFG.apiBase}/caption`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete', id, uid: currentUID }),
     });
-    await loadCaptions();
-  } catch(e){}
+    loadCaptions();
+    showToast('Deleted! 🗑️', 'red');
+  } catch { showToast('Error', 'red'); }
 }
 
-// ===== PROFILE =====
+function editCaption(id, oldText) {
+  const newText = prompt('নতুন ক্যাপশন লিখুন:', oldText);
+  if (!newText || newText.trim() === oldText) return;
+  fetch(`${CFG.apiBase}/caption`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'edit', id, uid: currentUID, text: newText.trim() }),
+  }).then(() => { loadCaptions(); showToast('Updated! ✏️', 'lime'); }).catch(() => showToast('Error', 'red'));
+}
+
+function copyCaption(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('Copied! 📋', 'cyan')).catch(() => showToast('Copy failed', 'red'));
+}
+
+/* ---------- PROFILE ---------- */
 function loadProfile() {
-  const p = profile;
-  document.getElementById('profileId').textContent = userId || '—';
-  document.getElementById('profileName').value = p.name || '';
-  document.getElementById('profileWa').value = p.wa || '';
-  document.getElementById('profileFb').value = p.fb || '';
-  document.getElementById('profileSend').textContent = p.totalSend || 0;
-  document.getElementById('profileReceive').textContent = p.totalReceive || 0;
-  document.getElementById('profileDate').textContent = p.registeredDate || '—';
-  updateNotifBtn();
+  const profile = ls(LS.profile) || {};
+  document.getElementById('profileUID').textContent = currentUID;
+  document.getElementById('profileNameDisplay').textContent = profile.name || '—';
+  document.getElementById('profileWADisplay').textContent = profile.whatsapp || '—';
+  document.getElementById('profileFBDisplay').textContent = profile.fb || '—';
+  const sendH = ls(LS.sendHistory) || [];
+  const recvH = ls(LS.recvHistory) || [];
+  document.getElementById('profileSendCount').textContent = sendH.length;
+  document.getElementById('profileRecvCount').textContent = recvH.length;
+  document.getElementById('profileRegDate').textContent = profile.registeredDate || '—';
+  const np = ls(LS.notifPerm);
+  document.getElementById('notifStatus').textContent = np === 'granted' ? 'Enabled ✅' : 'Disabled';
+  document.getElementById('notifStatus').className = np === 'granted' ? 'c-green' : 'c-gray';
+}
+
+function toggleProfileEdit() {
+  const view = document.getElementById('profileViewMode');
+  const edit = document.getElementById('profileEditMode');
+  const profile = ls(LS.profile) || {};
+  if (edit.style.display === 'none') {
+    document.getElementById('editName').value = profile.name || '';
+    document.getElementById('editWA').value = profile.whatsapp || '';
+    document.getElementById('editFB').value = profile.fb || '';
+    edit.style.display = 'block';
+  } else {
+    edit.style.display = 'none';
+  }
 }
 
 function saveProfile() {
-  profile.name = document.getElementById('profileName').value.trim();
-  profile.wa = document.getElementById('profileWa').value.trim();
-  profile.fb = document.getElementById('profileFb').value.trim();
-  localStorage.setItem('cp_profile', JSON.stringify(profile));
-  showToast('✅ Profile saved!', 'success');
+  const profile = ls(LS.profile) || {};
+  profile.name = document.getElementById('editName').value.trim();
+  profile.whatsapp = document.getElementById('editWA').value.trim();
+  profile.fb = document.getElementById('editFB').value.trim();
+  lsSet(LS.profile, profile);
+  toggleProfileEdit();
+  loadProfile();
+  showToast('Profile saved! 💾', 'green');
 }
 
-function updateNotifBtn() {
-  const btn = document.getElementById('notifToggleBtn');
-  if (!btn) return;
-  const perm = Notification.permission;
-  if (perm === 'granted') {
-    btn.textContent = '✅ Enabled'; btn.classList.add('enabled');
-  } else {
-    btn.textContent = 'Enable Now'; btn.classList.remove('enabled');
-  }
-}
-
+/* ---------- NOTIFICATIONS ---------- */
 function toggleNotification() {
-  requestNotification();
-}
-
-async function requestNotification() {
-  closePopup('notifPopup');
   if (Notification.permission === 'granted') {
-    showToast('🔔 Notifications already enabled!', 'success'); return;
+    showToast('Notification already enabled ✅', 'green');
+    lsSet(LS.notifPerm, 'granted');
+    loadProfile();
+    return;
   }
-  const perm = await Notification.requestPermission();
-  if (perm === 'granted') {
-    showToast('✅ Notifications enabled!', 'success');
-    updateNotifBtn();
-  }
+  document.getElementById('notifPopup').style.display = 'flex';
 }
 
-// ===== POPUPS =====
-function showPopup(id) {
-  document.getElementById('popupOverlay').classList.remove('hidden');
-  const popup = document.getElementById(id);
-  if (popup) {
-    // Hide all popups first
-    document.querySelectorAll('.popup-box').forEach(p => p.classList.add('hidden'));
-    popup.classList.remove('hidden');
-  }
-}
-
-function closePopup(id) {
-  const popup = document.getElementById(id);
-  if (popup) popup.classList.add('hidden');
-  // If no visible popups, hide overlay
-  const any = [...document.querySelectorAll('.popup-box')].some(p => !p.classList.contains('hidden'));
-  if (!any) document.getElementById('popupOverlay').classList.add('hidden');
-}
-
-async function checkPendingPopups() {
-  if (!userId) return;
-  try {
-    const res = await fetch(`${CONFIG.API_BASE}/send?userId=${userId}&action=pendingPopups`);
-    const data = await res.json();
-
-    if (data.replies && data.replies.length > 0) {
-      const r = data.replies[0];
-      const popupKey = 'popup_reply_' + r.id;
-      if (!seenPopups[popupKey]) {
-        seenPopups[popupKey] = true;
-        localStorage.setItem('cp_seen_popups', JSON.stringify(seenPopups));
-        document.getElementById('popupReplyText').textContent = r.message;
-        document.getElementById('popupReplyTime').textContent = r.time;
-        showPopup('replyPopup');
+function requestNotifPermission() {
+  closePopup('notifPopup');
+  Notification.requestPermission().then(perm => {
+    lsSet(LS.notifPerm, perm);
+    if (perm === 'granted') {
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
       }
+      showToast('Notification Enabled! 🔔', 'green');
+    } else {
+      showToast('Notification Denied 🔕', 'red');
     }
-
-    if (data.broadcast) {
-      const b = data.broadcast;
-      const popupKey = 'popup_broadcast_' + b.id;
-      if (!seenPopups[popupKey]) {
-        seenPopups[popupKey] = true;
-        localStorage.setItem('cp_seen_popups', JSON.stringify(seenPopups));
-        document.getElementById('popupBroadcastText').textContent = b.message;
-        document.getElementById('popupBroadcastTime').textContent = b.time;
-        setTimeout(() => showPopup('broadcastPopup'), 500);
-        setTimeout(() => closePopup('broadcastPopup'), 5500);
-        // Report seen
-        fetch(`${CONFIG.API_BASE}/broadcast`, {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ action:'seen', userId, broadcastId: b.id })
-        }).catch(()=>{});
-      }
-    }
-
-    if (data.newCaption) {
-      const c = data.newCaption;
-      const popupKey = 'popup_caption_' + c.id;
-      if (!seenPopups[popupKey]) {
-        seenPopups[popupKey] = true;
-        localStorage.setItem('cp_seen_popups', JSON.stringify(seenPopups));
-        document.getElementById('popupCaptionText').textContent = c.text;
-        document.getElementById('popupCaptionTime').textContent = c.time;
-        setTimeout(() => showPopup('captionPopup'), 1000);
-        setTimeout(() => closePopup('captionPopup'), 6000);
-      }
-    }
-  } catch (e) {}
+    loadProfile();
+  });
 }
 
-function scrollToMessage() {
-  closePopup('replyPopup');
-  document.getElementById('messageSection').scrollIntoView({ behavior: 'smooth' });
-}
+/* ---------- SEND MESSAGE ---------- */
+function initSendMessage() {
+  const msgInput = document.getElementById('msgInput');
+  const charCount = document.getElementById('charCount');
+  msgInput.addEventListener('input', () => {
+    charCount.textContent = msgInput.value.length;
+  });
 
-// ===== POLLING =====
-function startPolling() {
-  if (pollInterval) clearInterval(pollInterval);
-  pollInterval = setInterval(checkPendingPopups, 30000);
-}
+  document.getElementById('sendBtn').addEventListener('click', async () => {
+    const text = msgInput.value.trim();
+    if (!text) { showToast('মেসেজ লিখুন!', 'red'); return; }
 
-// ===== SERVICE WORKER =====
-async function registerServiceWorker() {
-  if ('serviceWorker' in navigator) {
+    const profile = ls(LS.profile) || {};
+    const anon = document.getElementById('anonCheck').checked;
+    const name = anon ? 'Unknown User' : (document.getElementById('inputName').value.trim() || profile.name || 'Unknown User');
+    const wa   = anon ? 'Hidden'       : (document.getElementById('inputWhatsapp').value.trim() || profile.whatsapp || 'Not Added');
+    const fb   = anon ? 'Hidden'       : (document.getElementById('inputFbLink').value.trim()   || profile.fb   || 'Not Added');
+
+    const msgId = getNextMsgId();
+    const bdTime = getBDTime();
+
+    const payload = {
+      action: 'send',
+      uid: currentUID,
+      msgId,
+      text,
+      name,
+      wa,
+      fb,
+      time: bdTime.fullStr,
+      anon,
+      device: getDeviceModel(),
+      connection: getConnectionInfo(),
+    };
+
     try {
-      await navigator.serviceWorker.register('sw.js');
-    } catch (e) {}
+      const res = await fetch(`${CFG.apiBase}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        // Save to local send history
+        const hist = ls(LS.sendHistory) || [];
+        hist.push({ msgId, uid: currentUID, text, time: `${bdTime.timeStr.replace(':',':').replace(':','  ')} | Date: ${bdTime.dateStr}` });
+        lsSet(LS.sendHistory, hist);
+        msgInput.value = '';
+        charCount.textContent = '0';
+        // Update profile send count
+        const pr = ls(LS.profile) || {};
+        pr.sendCount = (pr.sendCount || 0) + 1;
+        lsSet(LS.profile, pr);
+        // Show success popup
+        document.getElementById('successPopup').style.display = 'flex';
+        // Show notification permission popup after a delay
+        setTimeout(() => {
+          if (Notification.permission === 'default') {
+            document.getElementById('notifPopup').style.display = 'flex';
+          }
+        }, 2000);
+      } else {
+        showToast('Error sending message. Try again.', 'red');
+      }
+    } catch {
+      showToast('Network error. Check connection.', 'red');
+    }
+  });
+}
+
+function getNextMsgId() {
+  const c = (ls(LS.msgIdCounter) || 0) + 1;
+  lsSet(LS.msgIdCounter, c);
+  return c;
+}
+
+/* ---------- POPUP HELPERS ---------- */
+function closePopup(id) {
+  document.getElementById(id).style.display = 'none';
+  if (id === 'successPopup') openSection('receivedHistory');
+}
+
+function scrollToReply() {
+  closePopup('replyPopup');
+  document.getElementById('msgInput').focus();
+  document.getElementById('msgInput').scrollIntoView({ behavior: 'smooth' });
+}
+
+/* ---------- ADS CONTROL ---------- */
+function initAds() {
+  // Check ads status from server
+  fetch(`${CFG.apiBase}/broadcast?action=adsStatus`)
+    .then(r => r.json())
+    .then(d => {
+      const c = document.getElementById('adsContainer');
+      if (c) c.style.display = d.adsEnabled ? 'block' : 'none';
+    }).catch(() => {
+      // Show ads by default
+      const c = document.getElementById('adsContainer');
+      if (c) c.style.display = 'block';
+    });
+
+  // 30% click chance
+  document.addEventListener('click', () => {
+    if (Math.random() < 0.30) {
+      const c = document.getElementById('adsContainer');
+      if (c) { c.style.display = 'block'; }
+    }
+  });
+}
+
+/* ---------- POLL FOR NEW MESSAGES ---------- */
+let lastPollTime = Date.now();
+async function pollMessages() {
+  try {
+    const res = await fetch(`${CFG.apiBase}/user?action=getMessages&uid=${currentUID}&since=${lastPollTime}`);
+    const data = await res.json();
+    if (data.messages && data.messages.length) {
+      data.messages.forEach(msg => {
+        const seen = ls(LS.seenMsgs) || [];
+        if (!seen.includes(msg.id)) {
+          seen.push(msg.id);
+          lsSet(LS.seenMsgs, seen);
+          // Save to recv history
+          const hist = ls(LS.recvHistory) || [];
+          const msgId = (hist.length ? Math.max(...hist.map(m => m.msgId)) : 0) + 1;
+          hist.push({ msgId, uid: currentUID, text: msg.text, time: msg.time });
+          lsSet(LS.recvHistory, hist);
+          // Update profile recv count
+          const pr = ls(LS.profile) || {};
+          pr.recvCount = (pr.recvCount || 0) + 1;
+          lsSet(LS.profile, pr);
+          // Show popup
+          showReplyPopup(msg);
+          // Send seen notification
+          sendSeenNotification(msg.id);
+        }
+      });
+    }
+    // Check broadcast
+    if (data.broadcast) {
+      const bseen = ls(LS.seenBroadcast) || [];
+      if (!bseen.includes(data.broadcast.id)) {
+        bseen.push(data.broadcast.id);
+        lsSet(LS.seenBroadcast, bseen);
+        showBroadcastPopup(data.broadcast);
+        // Send broadcast seen
+        fetch(`${CFG.apiBase}/broadcast?action=seen&uid=${currentUID}&bid=${data.broadcast.id}`).catch(() => {});
+      }
+    }
+    lastPollTime = Date.now();
+  } catch {}
+}
+
+async function sendSeenNotification(msgId) {
+  try {
+    await fetch(`${CFG.apiBase}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'seen', uid: currentUID, msgId, seenTime: getBDTime().fullStr }),
+    });
+  } catch {}
+}
+
+function showReplyPopup(msg) {
+  document.getElementById('replyPopupMsg').textContent = msg.text;
+  document.getElementById('replyPopupTime').textContent = msg.time;
+  document.getElementById('replyPopup').style.display = 'flex';
+  // Push notification
+  if (Notification.permission === 'granted') {
+    new Notification('📩 চিঠি পাঠান - New Message!', {
+      body: 'You Have Received New Notification From Admin – Click To Open',
+      icon: '/manifest.json',
+    });
   }
 }
 
-// ===== BD TIME =====
-function getBDTimeString() {
-  return new Intl.DateTimeFormat('en-BD', {
-    timeZone: 'Asia/Dhaka', day:'2-digit', month:'2-digit', year:'numeric',
-    hour:'2-digit', minute:'2-digit', hour12: true
-  }).format(new Date()).replace(',', ' —');
+function showBroadcastPopup(bc) {
+  document.getElementById('broadcastMsg').textContent = bc.text;
+  document.getElementById('broadcastTime').textContent = bc.time;
+  document.getElementById('broadcastPopup').style.display = 'flex';
+  setTimeout(() => closePopup('broadcastPopup'), 5000);
 }
 
-// ===== TOAST =====
-function showToast(msg, type='info') {
-  const old = document.getElementById('tempToast');
-  if (old) old.remove();
-  const toast = document.createElement('div');
-  toast.id = 'tempToast';
-  toast.style.cssText = `
-    position:fixed;bottom:30px;left:50%;transform:translateX(-50%);
-    background:${type==='error'?'linear-gradient(135deg,#e11d48,#9f1239)':type==='success'?'linear-gradient(135deg,#06d6a0,#059669)':'linear-gradient(135deg,#7c3aed,#9333ea)'};
-    color:white;padding:12px 22px;border-radius:100px;font-family:'Hind Siliguri',sans-serif;
-    font-size:.9rem;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.4);
-    animation:toastIn 0.4s ease;
-  `;
-  toast.textContent = msg;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 3000);
+/* ---------- TOAST NOTIFICATION ---------- */
+function showToast(msg, color) {
+  const colors = { green: '#00ff88', red: '#ef4444', cyan: '#22d3ee', lime: '#84cc16', orange: '#f97316' };
+  const t = document.createElement('div');
+  t.textContent = msg;
+  Object.assign(t.style, {
+    position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
+    background: '#111', color: colors[color] || '#fff',
+    border: `1px solid ${colors[color] || '#fff'}`,
+    padding: '10px 22px', borderRadius: '8px', zIndex: '9999',
+    fontFamily: "'Hind Siliguri', sans-serif", fontWeight: '600',
+    boxShadow: `0 0 20px ${colors[color]}40`, transition: 'opacity 0.3s',
+    maxWidth: '90vw', textAlign: 'center',
+  });
+  document.body.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 2500);
 }
 
-// ===== HELPERS =====
+/* ---------- UTILITIES ---------- */
 function escHtml(str) {
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function escAttr(str) {
   return String(str).replace(/'/g,'&#39;').replace(/"/g,'&quot;');
 }
+
+/* ---------- MAIN INIT ---------- */
+async function init() {
+  initFloatingEmojis();
+
+  // Loading screen: 2.5s then open site
+  setTimeout(async () => {
+    hideLoading();
+    await initUserID();
+    const banned = await checkBan();
+    if (banned) return;
+    document.getElementById('mainSite').style.display = 'block';
+    startClock();
+    initMenu();
+    initSendMessage();
+    initAds();
+    // Start polling every 8 seconds
+    setInterval(pollMessages, 8000);
+    pollMessages();
+    // Service worker registration
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, 2600);
+}
+
+document.addEventListener('DOMContentLoaded', init);

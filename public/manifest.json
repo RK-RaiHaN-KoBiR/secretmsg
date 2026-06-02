@@ -1,14 +1,20 @@
 {
-  "name": "Chithi Pathao — চিঠি পাঠাও",
-  "short_name": "ChithiPathao",
-  "description": "Secret Anonymous Messaging Platform",
+  "name": "চিঠি পাঠান - Cithi Pathan",
+  "short_name": "ChithiPathan",
+  "description": "Secret Anonymous Message Box – মনের অনুভূতি প্রকাশ করুন নিজের পরিচয় লুকিয়ে",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0612",
-  "theme_color": "#b47fff",
-  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "lang": "bn",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
-  ]
+    { "src": "/icons/icon-72.png",  "sizes": "72x72",   "type": "image/png" },
+    { "src": "/icons/icon-96.png",  "sizes": "96x96",   "type": "image/png" },
+    { "src": "/icons/icon-128.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "screenshots": [],
+  "categories": ["social", "communication"]
 }
