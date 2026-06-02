@@ -1,58 +1,59 @@
-// ===== TELEGRAM WEBHOOK HELPER =====
-const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID = process.env.ADMIN_ID || '6048050987';
-const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+/* ============================================================
+   bot/webhook.js — Webhook Setup & Vercel Handler
+   ============================================================ */
 
-async function sendTelegramMessage(text, chatId = ADMIN_ID) {
+'use strict';
+
+/**
+ * Sets the Telegram webhook URL.
+ * Call this once after deployment.
+ */
+async function setupWebhook(TG_API, webhookUrl) {
   try {
-    const res = await fetch(`${TG_API}/sendMessage`, {
+    // Delete any existing webhook first
+    await fetch(`${TG_API}/deleteWebhook`, { method: 'POST' });
+
+    const res = await fetch(`${TG_API}/setWebhook`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML'
-      })
+        url: webhookUrl,
+        allowed_updates: ['message', 'callback_query'],
+        drop_pending_updates: true,
+      }),
     });
-    return res.ok;
+    const data = await res.json();
+    if (data.ok) {
+      console.log('✅ Webhook set successfully:', webhookUrl);
+    } else {
+      console.error('❌ Webhook setup failed:', data.description);
+    }
+    return data;
   } catch (e) {
-    console.error('Telegram send error:', e.message);
-    return false;
+    console.error('setupWebhook error:', e.message);
   }
 }
 
-async function sendReplyButton(text, userId, msgId) {
-  try {
-    const res = await fetch(`${TG_API}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: ADMIN_ID,
-        text,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '💬 Send Reply', callback_data: `reply_${userId}_${msgId}` },
-            { text: '🗑️ Delete', callback_data: `delete_msg_${msgId}` }
-          ]]
-        }
-      })
-    });
-    return res.ok;
-  } catch (e) {
-    console.error('Telegram reply button error:', e.message);
-    return false;
+/**
+ * Vercel serverless function handler for /api/webhook
+ * This receives all Telegram updates when deployed.
+ */
+async function vercelWebhookHandler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  if (req.method === 'GET') {
+    return res.status(200).json({ ok: true, message: 'Cithi-Pathan Bot Webhook Active ✅' });
   }
-}
-
-async function answerCallbackQuery(callbackQueryId, text = '') {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ ok: false, error: 'Method Not Allowed' });
+  }
   try {
-    await fetch(`${TG_API}/answerCallbackQuery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId, text })
-    });
-  } catch (e) {}
+    // Lazy import to avoid circular dependency
+    const { handleUpdate } = require('./bot');
+    await handleUpdate(req.body);
+  } catch (e) {
+    console.error('vercelWebhookHandler error:', e);
+  }
+  return res.status(200).json({ ok: true });
 }
 
-module.exports = { sendTelegramMessage, sendReplyButton, answerCallbackQuery, ADMIN_ID, TG_API, BOT_TOKEN };
+module.exports = { setupWebhook, vercelWebhookHandler };
