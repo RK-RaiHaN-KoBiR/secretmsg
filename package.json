@@ -1,17 +1,18 @@
 {
-  "name": "chithi-pathao",
+  "name": "cithipathan",
   "version": "1.0.0",
-  "description": "Secret Anonymous Messaging Platform — চিঠি পাঠাও",
-  "main": "api/botwebhook.js",
+  "description": "Cithi-Pathan Secret Anonymous Message Platform",
+  "main": "bot/bot.js",
   "scripts": {
-    "dev": "node server.js",
-    "start": "node server.js"
+    "start": "node bot/bot.js",
+    "dev":   "node bot/bot.js",
+    "setup-webhook": "node -e \"const {setupWebhook}=require('./bot/webhook');setupWebhook('https://api.telegram.org/bot'+process.env.BOT_TOKEN, process.env.WEBHOOK_URL).then(console.log)\""
   },
-  "engines": { "node": ">=18" },
+  "engines": { "node": ">=18.x" },
   "dependencies": {
     "node-fetch": "^3.3.2"
   },
-  "keywords": ["anonymous", "messaging", "telegram", "bot"],
+  "keywords": ["messaging", "anonymous", "telegram", "bot", "bangla"],
   "author": "RK-RaiHaN-KoBiR",
   "license": "MIT"
 }

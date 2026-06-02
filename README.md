@@ -1,74 +1,140 @@
-# 💌 Chithi Pathao — চিঠি পাঠাও
+# 💌 Cithi-Pathan — চিঠি পাঠান
 
-> Secret Anonymous Messaging Platform with Telegram Bot Admin Panel
+**Anonymous Secret Message Platform with Full Telegram Bot**
 
-## 🚀 Quick Deploy (GitHub → Vercel)
+🌐 Live: https://cithipathao.vercel.app  
+📦 Repo: https://github.com/RK-RaiHaN-KoBiR/secretmsg/
 
-### Step 1: Upload to GitHub
-1. Go to https://github.com/RK-RaiHaN-KoBiR/secretmsg/
-2. Upload all files keeping the folder structure intact
+---
 
-### Step 2: Deploy on Vercel
-1. Go to https://vercel.com
-2. Import your GitHub repository
-3. Add Environment Variables (from `.env.example`)
-4. Click Deploy ✅
+## 🚀 Quick Deploy (Vercel — 3 Steps)
 
-### Step 3: Set Telegram Webhook
-After deploying, open this URL in your browser:
+1. Upload this folder to your GitHub repo
+2. Go to [vercel.com](https://vercel.com) → **New Project** → Import your repo
+3. Add all **Environment Variables** (see table below) → **Deploy** ✅
+
+After first deploy, set Telegram webhook:
 ```
-https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://cithipathao.vercel.app/api/botwebhook
+https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://yoursite.vercel.app/api/webhook
 ```
 
-### Step 4: Set Bot Commands
-Open this URL:
-```
-https://api.telegram.org/bot<BOT_TOKEN>/setMyCommands?commands=[{"command":"start","description":"Open Welcome Menu"},{"command":"send","description":"Send Reply To User"},{"command":"received","description":"View Received Messages"},{"command":"replyhistory","description":"View Sent Replies"},{"command":"users","description":"Show All Users"},{"command":"broadcast","description":"Send Broadcast"},{"command":"caption","description":"Manage Captions"},{"command":"help","description":"Help Menu"},{"command":"ban","description":"Ban User"},{"command":"unban","description":"Unban User"},{"command":"info","description":"View User Info"}]
-```
+---
 
-## 📁 Folder Structure
+## 🔐 Environment Variables
+
+Set these in **Vercel → Project → Settings → Environment Variables**:
+
+| Variable | Value |
+|---|---|
+| `BOT_TOKEN` | `8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA` |
+| `ADMIN_ID` | `6048050987` |
+| `JSONBIN_BIN_ID` | `6a048364250b1311c344cc10` |
+| `JSONBIN_MASTER_KEY` | `$2a$10$dFJuDsfb...` |
+| `JSONBIN_ACCESS_KEY` | `$2a$10$YzxVA...` |
+| `VAPID_PUBLIC_KEY` | `BIh4Gq9Jk7z...` |
+| `VAPID_PRIVATE_KEY` | `-stTkJCFdw...` |
+| `SITE_URL` | `https://cithipathao.vercel.app` |
+| `WEBHOOK_URL` | `https://cithipathao.vercel.app/api/webhook` |
+
+---
+
+## 📂 Complete Project Structure
+
 ```
-secretmsg/
-├── public/          ← Website files
-│   ├── index.html
-│   ├── style.css
-│   ├── app.js
-│   ├── sw.js        ← Service Worker
-│   └── manifest.json
-├── api/             ← Backend API (Vercel serverless)
-│   ├── send.js      ← Message API
-│   ├── user.js      ← User management
-│   ├── caption.js   ← Caption management
-│   ├── broadcast.js ← Broadcast system
-│   ├── database.js  ← JSONBin helper
-│   └── botwebhook.js← Telegram webhook
-├── bot/             ← Telegram bot logic
-│   ├── bot.js       ← Main bot handler
-│   └── webhook.js   ← Telegram API helper
-├── vercel.json      ← Vercel config
+cithipathan/
+│
+├── public/               ← Website (Part 1)
+│   ├── index.html        ← Full UI
+│   ├── style.css         ← Neon dark theme
+│   ├── app.js            ← Frontend logic
+│   ├── sw.js             ← Service Worker
+│   └── manifest.json     ← PWA
+│
+├── api/                  ← Vercel Serverless Functions
+│   ├── database.js       ← JSONBin helper
+│   ├── user.js           ← User create/ban/device
+│   ├── send.js           ← Message send + seen
+│   ├── caption.js        ← Caption CRUD
+│   ├── broadcast.js      ← Broadcast + Ads
+│   └── webhook.js        ← Telegram webhook receiver
+│
+├── bot/                  ← Telegram Bot (Part 2)
+│   ├── bot.js            ← Main entry + polling
+│   ├── commands.js       ← All commands + keyboard
+│   ├── webhook.js        ← Webhook setup
+│   └── admin.js          ← Admin notify helpers
+│
+├── database/             ← Schema references
+│   ├── users.json
+│   ├── captions.json
+│   └── messages.json
+│
 ├── package.json
-├── .env.example     ← Copy to .env
+├── vercel.json           ← Deploy config
+├── .env.example
 └── README.md
 ```
 
+---
+
 ## 🤖 Bot Commands
-| Command | Action |
-|---------|--------|
+
+| Command | Description |
+|---|---|
 | `/start` | Welcome menu |
-| `/send <uid> <msg>` | Send reply to user |
+| `/send UID message` | Send reply to user |
 | `/received` | View all received messages |
 | `/replyhistory` | View sent replies |
 | `/users` | Show all registered users |
-| `/broadcast` | Send broadcast to all users |
+| `/broadcast` | Send broadcast to all |
 | `/caption` | Manage captions |
-| `/ban <uid>` | Ban a user |
-| `/unban <uid>` | Unban a user |
-| `/info <uid>` | View user info |
 | `/help` | Help menu |
+| `/ban UID` | Ban a user |
+| `/unban UID` | Unban a user |
+| `/info UID` | View user profile |
+| `/clear UID` | Clear user data |
+| `/delete MSGID` | Delete a message |
+| `/status` | Bot status report |
+| `/ads on\|off` | Toggle ads |
 
-## 🌐 Live Website
-https://cithipathao.vercel.app
+## ⌨️ Keyboard Buttons
 
-## 📞 Contact
-- Facebook: https://m.me/ToR.PiccHi.JaMai.TaH.X
-- Telegram: https://t.me/rksystemall
+```
+[ 📨 Send Message ]  [ 📥 Received History ]
+[ 📤 Reply History ] [ 👥 Show All User    ]
+[ 📢 Broadcast     ] [ 📝 Caption BOX      ]
+[              🆘 Help                    ]
+```
+
+---
+
+## ✨ All Features
+
+**Website:**
+- 💖 Animated love loading screen
+- 🕐 Live BD clock (random colors)
+- 🆔 Auto User ID (1001–9999, sequential)
+- 📱 Device info capture → Bot notification
+- 💌 Anonymous + named message sending
+- 📜 Send/Received History (user-specific)
+- 📝 Caption Box (add/edit/delete)
+- 👤 Profile (optional name/WhatsApp/FB)
+- 🔔 Push Notifications (Service Worker)
+- 📢 Broadcast popup system
+- 🚫 Ban screen for banned users
+- 💚 Glassmorphism Neon Dark UI
+- 📱 Fully mobile responsive
+
+**Bot:**
+- 📩 Inline Reply button on every message
+- 👁️ Seen status reports (one-time)
+- 📤 Two-way reply: inline button + `/send` command
+- 📢 Broadcast to all users
+- 👥 Full user list with View/Ban/Unban/Clear
+- 📝 Caption management from bot
+- 📊 Status report
+- 🔔 Ads ON/OFF: `/ads on` / `/ads off`
+
+---
+
+Made with 💖 by RK-RaiHaN-KoBiR
