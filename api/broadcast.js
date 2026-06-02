@@ -1,68 +1,52 @@
-// ===== BROADCAST API =====
-const { readDB, writeDB, getBDTime, genId, invalidateCache } = require('./database');
-const { sendTelegramMessage } = require('../bot/webhook');
+/* ============================================================
+   api/broadcast.js — Broadcast & Ads Control Endpoint
+   ============================================================ */
 
-module.exports = async (req, res) => {
+const { readDB, writeDB } = require('./database');
+
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
+  const action = req.query.action || (req.body && req.body.action);
+
   try {
     const db = await readDB();
 
-    if (req.method === 'POST') {
-      const { action, message, userId, broadcastId, deviceInfo } = req.body;
-
-      if (action === 'send') {
-        const now = getBDTime();
-        const id = genId();
-        db.broadcast = { id, message, time: now, seenBy: [] };
-        await writeDB(db);
-        invalidateCache();
-
-        const userCount = Object.keys(db.users || {}).length;
-        const report =
-`✅ Broadcast Successfully Sent To Website All Users!
-
-🕒 Send Time : ${now}
-
-👥 Total Users: ${userCount}`;
-        await sendTelegramMessage(report);
-        return res.json({ success: true });
-      }
-
-      if (action === 'seen') {
-        if (db.broadcast && db.broadcast.id === broadcastId) {
-          if (!db.broadcast.seenBy) db.broadcast.seenBy = [];
-          if (!db.broadcast.seenBy.includes(userId)) {
-            db.broadcast.seenBy.push(userId);
-            await writeDB(db);
-
-            const di = deviceInfo || {};
-            const seenReport =
-`👁️ User : [${userId}]
-Seen Your Broadcast Message!
-
-🕒 Seen Time :
-${getBDTime()}
-
-📤 Broadcast Send Time :
-${db.broadcast.time}
-
-🆔 User ID : ${userId}
-📱 Device Info : ${di.platform || 'Unknown'}
-📶 Network Info : ${di.networkType || 'Unknown'}`;
-            await sendTelegramMessage(seenReport);
-          }
-        }
-        return res.json({ ok: true });
-      }
+    /* ---- ADS STATUS ---- */
+    if (action === 'adsStatus') {
+      return res.status(200).json({ adsEnabled: db.meta.adsEnabled !== false });
     }
 
-    res.status(405).json({ error: 'Method not allowed' });
-  } catch (e) {
-    console.error('Broadcast API Error:', e);
-    res.status(500).json({ error: 'Server error' });
+    /* ---- BROADCAST SEEN ---- */
+    if (action === 'seen') {
+      const { uid, bid } = req.query;
+      const bc = (db.broadcasts || []).find(b => b.id === bid);
+      if (bc) {
+        if (!bc.seenBy) bc.seenBy = [];
+        if (!bc.seenBy.includes(uid)) {
+          bc.seenBy.push(uid);
+          await writeDB(db);
+        }
+      }
+      return res.status(200).json({ ok: true });
+    }
+
+    /* ---- GET LATEST BROADCAST ---- */
+    if (action === 'latest') {
+      const uid = req.query.uid;
+      const bcs = (db.broadcasts || []);
+      const latest = bcs.length ? bcs[bcs.length - 1] : null;
+      if (!latest) return res.status(200).json({ broadcast: null });
+      const seen = latest.seenBy && latest.seenBy.includes(String(uid));
+      return res.status(200).json({ broadcast: seen ? null : latest });
+    }
+
+    return res.status(400).json({ ok: false });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ ok: false, error: 'Server error' });
   }
 };
