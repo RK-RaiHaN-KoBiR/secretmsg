@@ -1,0 +1,36 @@
+{
+  "_comment": "Messages and replies are stored in JSONBin. This file is the local schema reference.",
+  "_message_schema": {
+    "id":       "string — unique genId()",
+    "msgId":    "number — sequential",
+    "fromUID":  "string — sender user ID",
+    "text":     "string — message content",
+    "time":     "string — BD time formatted",
+    "name":     "string — sender name or 'Unknown User'",
+    "wa":       "string — WhatsApp number or 'Hidden'",
+    "fb":       "string — FB link or 'Hidden'",
+    "anon":     "boolean — anonymous flag",
+    "seen":     "boolean — admin has seen",
+    "deleted":  "boolean — soft delete",
+    "timestamp":"number — Date.now()"
+  },
+  "_reply_schema": {
+    "id":           "string — unique genId()",
+    "msgId":        "number — sequential",
+    "toUID":        "string — recipient user ID",
+    "text":         "string — reply content",
+    "sentTime":     "string — BD time formatted",
+    "seen":         "boolean — user has seen",
+    "seenTime":     "string — when user saw it",
+    "seenReported": "boolean — admin already notified",
+    "deleted":      "boolean — soft delete",
+    "timestamp":    "number — Date.now()"
+  },
+  "_broadcast_schema": {
+    "id":       "string — unique genId()",
+    "text":     "string — broadcast content",
+    "time":     "string — BD time formatted",
+    "seenBy":   "array — list of UIDs who saw it",
+    "timestamp":"number — Date.now()"
+  }
+}

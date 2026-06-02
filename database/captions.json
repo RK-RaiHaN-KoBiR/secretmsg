@@ -1,0 +1,32 @@
+{
+  "_comment": "Captions are stored in JSONBin under db.captions. This file is the local schema reference.",
+  "_schema": {
+    "id":         "string — unique genId()",
+    "captionNum": "number — sequential from 1",
+    "text":       "string — caption content",
+    "addedBy":    "string — 'admin' or uid",
+    "time":       "string — BD time formatted",
+    "deleted":    "boolean — soft delete",
+    "timestamp":  "number — Date.now()"
+  },
+  "example": [
+    {
+      "id": "abc123",
+      "captionNum": 1,
+      "text": "আল্লাহর উপর ভরসা রাখুন, তিনি কখনো নিরাশ করেন না।",
+      "addedBy": "admin",
+      "time": "14/05/2026 — 09:30 PM BD Time",
+      "deleted": false,
+      "timestamp": 1715706600000
+    },
+    {
+      "id": "def456",
+      "captionNum": 2,
+      "text": "নিজের জন্য শান্তির পথ খুঁজুন।",
+      "addedBy": "1001",
+      "time": "14/05/2026 — 09:40 PM BD Time",
+      "deleted": false,
+      "timestamp": 1715707200000
+    }
+  ]
+}

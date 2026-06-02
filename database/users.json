@@ -1,0 +1,15 @@
+{
+  "meta": {
+    "nextUID": 1001,
+    "nextCaptionNum": 1,
+    "nextMsgId": 1,
+    "nextReplyId": 1,
+    "adsEnabled": true,
+    "createdAt": "2026-01-01"
+  },
+  "users": {},
+  "messages": [],
+  "replies": [],
+  "captions": [],
+  "broadcasts": []
+}
