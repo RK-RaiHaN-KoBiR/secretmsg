@@ -1,91 +1,143 @@
-/* ====== SERVICE WORKER — sw.js ====== */
-const CACHE_NAME = 'cithipathan-v1';
-const ASSETS = [
+/**
+ * ═══════════════════════════════════════════════════════
+ *  CITHI PATHAN — sw.js (Service Worker)
+ *  Handles: PWA caching, Push Notifications, Background Sync
+ * ═══════════════════════════════════════════════════════
+ */
+
+'use strict';
+
+/* ──────────────────────────────────────────────────────
+   CACHE CONFIG — update CACHE_VERSION when deploying new files
+────────────────────────────────────────────────────── */
+const CACHE_VERSION = 'cithi-v1.0';
+const CACHE_ASSETS  = [
   '/',
   '/index.html',
   '/style.css',
   '/app.js',
-  '/manifest.json',
+  '/manifest.json'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+/* ══════════════════════════════════════
+   INSTALL EVENT — cache static assets
+══════════════════════════════════════ */
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(CACHE_ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
+/* ══════════════════════════════════════
+   ACTIVATE EVENT — clean old caches
+══════════════════════════════════════ */
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener('fetch', e => {
-  // Network first for API, cache first for assets
-  if (e.request.url.includes('/api/')) {
-    e.respondWith(fetch(e.request).catch(() => new Response(JSON.stringify({ ok: false }), { headers: { 'Content-Type': 'application/json' } })));
-    return;
-  }
-  e.respondWith(
-    caches.match(e.request).then(cached => cached || fetch(e.request))
+      Promise.all(
+        keys
+          .filter(key => key !== CACHE_VERSION)
+          .map(key => caches.delete(key))
+      )
+    ).then(() => self.clients.claim())
   );
 });
 
-/* Push notification handler */
-self.addEventListener('push', e => {
-  let data = { title: '📩 চিঠি পাঠান', body: 'You Have Received New Notification From Admin – Click To Open', url: '/' };
-  if (e.data) {
-    try { data = { ...data, ...e.data.json() }; } catch {}
-  }
-  e.waitUntil(
-    self.registration.showNotification(data.title, {
-      body: data.body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-72.png',
-      tag: 'cithi-msg-' + Date.now(),
-      requireInteraction: true,
-      data: { url: data.url || '/' },
-    })
-  );
-});
+/* ══════════════════════════════════════
+   FETCH EVENT — serve from cache, fallback to network
+══════════════════════════════════════ */
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
 
-self.addEventListener('notificationclick', e => {
-  e.notification.close();
-  const url = (e.notification.data && e.notification.data.url) || '/';
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
-      for (const c of list) {
-        if (c.url === url && 'focus' in c) return c.focus();
-      }
-      if (clients.openWindow) return clients.openWindow(url);
-    })
-  );
-});
+  // Skip non-GET and API routes
+  if (request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
 
-/* Background sync for messages */
-self.addEventListener('sync', e => {
-  if (e.tag === 'sync-messages') {
-    e.waitUntil(syncMessages());
-  }
-});
-
-async function syncMessages() {
-  // Sync any pending messages
-  const cache = await caches.open('cithi-sync');
-  const keys = await cache.keys();
-  for (const req of keys) {
-    try {
-      const data = await (await cache.match(req)).json();
-      await fetch('/api/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+  event.respondWith(
+    caches.match(request).then(cached => {
+      if (cached) return cached;
+      return fetch(request).then(response => {
+        // Cache successful responses for same-origin requests
+        if (response.ok && url.origin === self.location.origin) {
+          const clone = response.clone();
+          caches.open(CACHE_VERSION).then(c => c.put(request, clone));
+        }
+        return response;
+      }).catch(() => {
+        // Offline fallback — return cached index.html for navigation
+        if (request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
       });
-      await cache.delete(req);
-    } catch {}
+    })
+  );
+});
+
+/* ══════════════════════════════════════
+   PUSH EVENT — show notification
+══════════════════════════════════════ */
+self.addEventListener('push', event => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (_) {
+    data = { title: '💌 চিঠি পাঠান', body: event.data?.text() || 'নতুন বার্তা এসেছে!' };
   }
-}
+
+  const title   = data.title   || '💌 চিঠি পাঠান — Cithi Pathan';
+  const body    = data.body    || 'You Have Received New Notification From Admin – Click To Open';
+  const icon    = data.icon    || '/icons/icon-192.png';
+  const badge   = data.badge   || '/icons/badge.png';
+  const tag     = data.tag     || 'cithi-notification';
+  const url     = data.url     || '/';
+
+  const options = {
+    body,
+    icon,
+    badge,
+    tag,
+    requireInteraction: false,
+    vibrate: [200, 100, 200],
+    data: { url },
+    actions: [
+      { action: 'open',  title: '📖 Open' },
+      { action: 'close', title: '❌ Dismiss' }
+    ]
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
+});
+
+/* ══════════════════════════════════════
+   NOTIFICATION CLICK — open the website
+══════════════════════════════════════ */
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+
+  if (event.action === 'close') return;
+
+  const targetUrl = event.notification.data?.url || '/';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true })
+      .then(clientList => {
+        // Focus existing window if open
+        for (const client of clientList) {
+          if (client.url === targetUrl && 'focus' in client) {
+            return client.focus();
+          }
+        }
+        // Open new window
+        if (clients.openWindow) return clients.openWindow(targetUrl);
+      })
+  );
+});
+
+/* ══════════════════════════════════════
+   MESSAGE EVENT — communication with app.js
+══════════════════════════════════════ */
+self.addEventListener('message', event => {
+  if (event.data === 'skipWaiting') self.skipWaiting();
+});
