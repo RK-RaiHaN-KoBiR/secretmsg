@@ -1,140 +1,164 @@
-# 💌 Cithi-Pathan — চিঠি পাঠান
+# 💌 চিঠি পাঠান — Cithi Pathan
 
-**Anonymous Secret Message Platform with Full Telegram Bot**
-
-🌐 Live: https://cithipathao.vercel.app  
-📦 Repo: https://github.com/RK-RaiHaN-KoBiR/secretmsg/
+> Anonymous Secret Message Platform · Telegram Bot Admin · Firebase · PWA · Vercel
 
 ---
 
-## 🚀 Quick Deploy (Vercel — 3 Steps)
+## 🚀 Quick Deploy (Android-Friendly)
 
-1. Upload this folder to your GitHub repo
-2. Go to [vercel.com](https://vercel.com) → **New Project** → Import your repo
-3. Add all **Environment Variables** (see table below) → **Deploy** ✅
+### Step 1 — GitHub এ Upload করুন
 
-After first deploy, set Telegram webhook:
-```
-https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://yoursite.vercel.app/api/webhook
-```
+1. [github.com](https://github.com) এ Login করুন  
+2. New Repository তৈরি করুন → নাম: `secretmsg`  
+3. সব File Upload করুন (এই ZIP এর ভেতরের সব ফাইল)
+
+### Step 2 — Vercel এ Deploy করুন
+
+1. [vercel.com](https://vercel.com) এ Login করুন  
+2. **New Project** → GitHub repo সিলেক্ট করুন  
+3. **Environment Variables** যোগ করুন (নিচে দেখুন)  
+4. **Deploy** চাপুন — সাইট Live হয়ে যাবে ✅
 
 ---
 
-## 🔐 Environment Variables
-
-Set these in **Vercel → Project → Settings → Environment Variables**:
+## ⚙️ Environment Variables (Vercel Dashboard এ Set করুন)
 
 | Variable | Value |
 |---|---|
-| `BOT_TOKEN` | `8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA` |
-| `ADMIN_ID` | `6048050987` |
-| `JSONBIN_BIN_ID` | `6a048364250b1311c344cc10` |
-| `JSONBIN_MASTER_KEY` | `$2a$10$dFJuDsfb...` |
-| `JSONBIN_ACCESS_KEY` | `$2a$10$YzxVA...` |
-| `VAPID_PUBLIC_KEY` | `BIh4Gq9Jk7z...` |
-| `VAPID_PRIVATE_KEY` | `-stTkJCFdw...` |
-| `SITE_URL` | `https://cithipathao.vercel.app` |
-| `WEBHOOK_URL` | `https://cithipathao.vercel.app/api/webhook` |
+| `BOT_TOKEN` | আপনার Telegram Bot Token |
+| `ADMIN_ID` | আপনার Telegram User ID |
+| `FIREBASE_DB_URL` | Firebase Realtime DB URL |
+| `VAPID_PUBLIC_KEY` | VAPID Public Key |
+| `VAPID_PRIVATE_KEY` | VAPID Private Key |
+| `VAPID_SUBJECT` | `mailto:your@email.com` |
+| `WEBHOOK_URL` | `https://your-site.vercel.app/api/webhook` |
 
 ---
 
-## 📂 Complete Project Structure
+## 🤖 Telegram Bot Webhook Set করুন
+
+Deploy করার পর Browser এ এই URL Open করুন:
+
+```
+https://api.telegram.org/bot<BOT_TOKEN>/setWebhook?url=https://cithipathao.vercel.app/api/webhook
+```
+
+`<BOT_TOKEN>` এর জায়গায় আপনার Bot Token বসান।
+
+---
+
+## 📂 Project Structure
 
 ```
 cithipathan/
+├── public/              ← Frontend (Part 1)
+│   ├── index.html       ← মূল পেজ
+│   ├── style.css        ← সব ডিজাইন
+│   ├── app.js           ← Frontend Logic
+│   ├── sw.js            ← Service Worker (PWA + Push)
+│   └── manifest.json    ← PWA Manifest
 │
-├── public/               ← Website (Part 1)
-│   ├── index.html        ← Full UI
-│   ├── style.css         ← Neon dark theme
-│   ├── app.js            ← Frontend logic
-│   ├── sw.js             ← Service Worker
-│   └── manifest.json     ← PWA
+├── api/                 ← Backend Serverless (Part 1)
+│   ├── send.js          ← Message send → Telegram alert
+│   ├── user.js          ← User registration + IP lookup
+│   ├── caption.js       ← Caption notification
+│   ├── broadcast.js     ← Broadcast seen report
+│   └── database.js      ← Firebase REST helpers
 │
-├── api/                  ← Vercel Serverless Functions
-│   ├── database.js       ← JSONBin helper
-│   ├── user.js           ← User create/ban/device
-│   ├── send.js           ← Message send + seen
-│   ├── caption.js        ← Caption CRUD
-│   ├── broadcast.js      ← Broadcast + Ads
-│   └── webhook.js        ← Telegram webhook receiver
+├── bot/                 ← Telegram Bot (Part 2)
+│   ├── bot.js           ← Main bot logic
+│   ├── commands.js      ← All commands
+│   ├── webhook.js       ← Webhook handler
+│   └── admin.js         ← Admin actions
 │
-├── bot/                  ← Telegram Bot (Part 2)
-│   ├── bot.js            ← Main entry + polling
-│   ├── commands.js       ← All commands + keyboard
-│   ├── webhook.js        ← Webhook setup
-│   └── admin.js          ← Admin notify helpers
-│
-├── database/             ← Schema references
-│   ├── users.json
-│   ├── captions.json
-│   └── messages.json
-│
-├── package.json
-├── vercel.json           ← Deploy config
-├── .env.example
-└── README.md
+├── vercel.json          ← Vercel deployment config
+├── package.json         ← Dependencies
+├── .env.example         ← Environment template
+└── README.md            ← এই ফাইল
+```
+
+---
+
+## 🔥 Firebase Setup
+
+1. [console.firebase.google.com](https://console.firebase.google.com) এ যান  
+2. Project: **cithi-pathan** open করুন  
+3. **Realtime Database** → Rules → নিচের rules set করুন:
+
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth == null || auth.uid == $uid",
+        ".write": "auth == null"
+      }
+    },
+    "captions": {
+      ".read": true,
+      ".write": true
+    },
+    "broadcast": {
+      ".read": true,
+      ".write": true
+    },
+    "pushSubscriptions": {
+      ".read": true,
+      ".write": true
+    },
+    "settings": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
 ```
 
 ---
 
 ## 🤖 Bot Commands
 
-| Command | Description |
+| Command | কাজ |
 |---|---|
 | `/start` | Welcome menu |
-| `/send UID message` | Send reply to user |
-| `/received` | View all received messages |
-| `/replyhistory` | View sent replies |
-| `/users` | Show all registered users |
-| `/broadcast` | Send broadcast to all |
-| `/caption` | Manage captions |
+| `/send 1001 Hello` | User কে message পাঠান |
+| `/received` | Received history |
+| `/replyhistory` | Sent reply history |
+| `/users` | সব registered user |
+| `/broadcast মেসেজ` | সবাইকে broadcast |
+| `/caption` | Caption manage |
+| `/ban 1001` | User ban |
+| `/unban 1001` | User unban |
+| `/info 1001` | User info দেখুন |
+| `/ads on` | Ads চালু |
+| `/ads off` | Ads বন্ধ |
 | `/help` | Help menu |
-| `/ban UID` | Ban a user |
-| `/unban UID` | Unban a user |
-| `/info UID` | View user profile |
-| `/clear UID` | Clear user data |
-| `/delete MSGID` | Delete a message |
-| `/status` | Bot status report |
-| `/ads on\|off` | Toggle ads |
-
-## ⌨️ Keyboard Buttons
-
-```
-[ 📨 Send Message ]  [ 📥 Received History ]
-[ 📤 Reply History ] [ 👥 Show All User    ]
-[ 📢 Broadcast     ] [ 📝 Caption BOX      ]
-[              🆘 Help                    ]
-```
 
 ---
 
-## ✨ All Features
+## ✨ Features
 
-**Website:**
-- 💖 Animated love loading screen
-- 🕐 Live BD clock (random colors)
-- 🆔 Auto User ID (1001–9999, sequential)
-- 📱 Device info capture → Bot notification
-- 💌 Anonymous + named message sending
-- 📜 Send/Received History (user-specific)
-- 📝 Caption Box (add/edit/delete)
-- 👤 Profile (optional name/WhatsApp/FB)
-- 🔔 Push Notifications (Service Worker)
-- 📢 Broadcast popup system
-- 🚫 Ban screen for banned users
-- 💚 Glassmorphism Neon Dark UI
-- 📱 Fully mobile responsive
-
-**Bot:**
-- 📩 Inline Reply button on every message
-- 👁️ Seen status reports (one-time)
-- 📤 Two-way reply: inline button + `/send` command
+- 💌 Anonymous message sending
+- 🆔 Auto sequential User ID (1001–9999)
+- 🤖 Telegram bot admin backend
+- 🔔 Push notifications (VAPID)
+- 📲 PWA — Install as app
+- 🔒 Ban/Unban system
+- 📡 Real-time Firebase sync
 - 📢 Broadcast to all users
-- 👥 Full user list with View/Ban/Unban/Clear
-- 📝 Caption management from bot
-- 📊 Status report
-- 🔔 Ads ON/OFF: `/ads on` / `/ads off`
+- 📝 Caption box (Admin + User)
+- 👁️ Message seen tracking
+- 📱 Fully responsive (Mobile first)
+- 🌙 Dark neon theme
 
 ---
 
-Made with 💖 by RK-RaiHaN-KoBiR
+## 👤 Developer
+
+**RK RaiHaN KoBiR**  
+🔗 GitHub: [github.com/RK-RaiHaN-KoBiR](https://github.com/RK-RaiHaN-KoBiR)  
+📩 Telegram: [t.me/rksystemall](https://t.me/rksystemall)
+
+---
+
+> ⚠️ **Part 2** (bot folder) আলাদাভাবে দেওয়া হবে।

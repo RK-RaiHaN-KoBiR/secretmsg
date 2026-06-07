@@ -1,33 +1,59 @@
 {
   "version": 2,
-  "buildCommand": "echo 'No build needed'",
-  "outputDirectory": "public",
-  "functions": {
-    "api/user.js":      { "maxDuration": 30 },
-    "api/send.js":      { "maxDuration": 30 },
-    "api/caption.js":   { "maxDuration": 30 },
-    "api/broadcast.js": { "maxDuration": 30 },
-    "api/webhook.js":   { "maxDuration": 60 }
-  },
-  "routes": [
-    { "src": "/api/user",      "dest": "/api/user.js" },
-    { "src": "/api/send",      "dest": "/api/send.js" },
-    { "src": "/api/caption",   "dest": "/api/caption.js" },
-    { "src": "/api/broadcast", "dest": "/api/broadcast.js" },
-    { "src": "/api/webhook",   "dest": "/api/webhook.js" },
-    { "src": "/sw.js",         "dest": "/public/sw.js",
-      "headers": { "Service-Worker-Allowed": "/" } },
-    { "src": "/(.*)",          "dest": "/public/$1" }
+  "name": "cithipathan",
+  "builds": [
+    {
+      "src": "public/**",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/*.js",
+      "use": "@vercel/node"
+    }
   ],
-  "env": {
-    "BOT_TOKEN":          "@bot_token",
-    "ADMIN_ID":           "@admin_id",
-    "JSONBIN_BIN_ID":     "@jsonbin_bin_id",
-    "JSONBIN_MASTER_KEY": "@jsonbin_master_key",
-    "JSONBIN_ACCESS_KEY": "@jsonbin_access_key",
-    "VAPID_PUBLIC_KEY":   "@vapid_public_key",
-    "VAPID_PRIVATE_KEY":  "@vapid_private_key",
-    "SITE_URL":           "@site_url",
-    "WEBHOOK_URL":        "@webhook_url"
-  }
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/public/sw.js",
+      "headers": {
+        "Service-Worker-Allowed": "/",
+        "Cache-Control": "no-cache"
+      }
+    },
+    {
+      "src": "/manifest.json",
+      "dest": "/public/manifest.json"
+    },
+    {
+      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot))",
+      "dest": "/public/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" },
+        { "key": "Referrer-Policy", "value": "no-referrer" }
+      ]
+    }
+  ]
 }
