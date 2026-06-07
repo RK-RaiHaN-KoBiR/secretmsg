@@ -1,6 +1,15 @@
-/* ===== api/webhook.js — Telegram Webhook Endpoint ===== */
-const botHandler = require('../bot/bot');
+/**
+ * ═══════════════════════════════════════════════════════
+ *  /api/webhook.js — Vercel Serverless Entry Point
+ *  Delegates to bot/webhook.js
+ *
+ *  This file is the public-facing Vercel route:
+ *  https://cithipathao.vercel.app/api/webhook
+ *
+ *  HOW TO SET TELEGRAM WEBHOOK:
+ *  Open in browser after deploying:
+ *  https://cithipathao.vercel.app/api/webhook?action=set
+ * ═══════════════════════════════════════════════════════
+ */
 
-module.exports = async function handler(req, res) {
-  return botHandler(req, res);
-};
+export { default } from '../bot/webhook.js';

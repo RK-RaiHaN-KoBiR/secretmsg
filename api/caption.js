@@ -1,116 +1,87 @@
-/* ============================================================
-   api/caption.js — Caption Management Endpoint
-   ============================================================ */
+/**
+ * ═══════════════════════════════════════════════════════
+ *  /api/caption.js — Vercel Serverless Function
+ *  Handles: New caption alert to admin bot
+ *           Push notification to all users for new caption
+ * ═══════════════════════════════════════════════════════
+ */
 
-const { readDB, writeDB, genId } = require('./database');
+'use strict';
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID  = process.env.ADMIN_ID  || '6048050987';
-const TG_API    = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const BOT_TOKEN       = process.env.BOT_TOKEN       || "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA";
+const ADMIN_ID        = process.env.ADMIN_ID        || "6048050987";
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || "https://cithi-pathan-default-rtdb.firebaseio.com";
 
-function getBDTime() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
-  const pad = n => String(n).padStart(2, '0');
-  let h = now.getHours(), m = now.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} — ${pad(h)}:${pad(m)} ${ampm} BD Time`;
+/* ──────────────────────────────────────────────────────
+   VAPID CONFIG — for sending push notifications
+────────────────────────────────────────────────────── */
+const VAPID_SUBJECT     = "mailto:Taniishaakhtar@gmail.com";
+const VAPID_PUBLIC_KEY  = process.env.VAPID_PUBLIC_KEY  || "BIh4Gq9Jk7zAHcmViGZZLSmMVwl8zcmuOdAplHXSFzljdyffQdSIJ0ACpfNHTyGFhIeG2d9O8Y6MJJhZ-MpdxBY";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "-stTkJCFdwSCV2MsKMS1fioNYi75GT1l_vIeicJ42bc";
+
+function bdTime(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  return d.toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  }).replace(',', ' —') + ' BD Time';
 }
 
-async function sendTelegram(chatId, text, extra = {}) {
-  try {
-    await fetch(`${TG_API}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
-    });
-  } catch {}
+async function sendTelegram(method, params) {
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
+  const res  = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(params)
+  });
+  return res.json();
 }
 
-module.exports = async function handler(req, res) {
+/* ──────────────────────────────────────────────────────
+   MAIN HANDLER
+────────────────────────────────────────────────────── */
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
 
-  try {
-    const db = await readDB();
+  const body = req.body;
+  if (!body) return res.status(400).json({ error: 'No body' });
 
-    /* ---- GET CAPTIONS ---- */
-    if (req.method === 'GET') {
-      const uid = req.query.uid;
-      const captions = (db.captions || []).filter(c => !c.deleted);
-      return res.status(200).json({ ok: true, captions });
-    }
+  /* ── New Caption Added ── */
+  if (body.action === 'add') {
+    const { uid, capData } = body;
 
-    if (req.method !== 'POST') return res.status(405).json({ ok: false });
+    const text = `
+🚨 <b>Alert : New Caption Added!</b>
 
-    const { action, uid, text, id } = req.body || {};
+📌 <b>Caption Number :</b>
+${capData.capId}
 
-    /* ---- ADD CAPTION ---- */
-    if (action === 'add') {
-      if (!text || !text.trim()) return res.status(400).json({ ok: false, error: 'No text' });
-      const captionNum = db.meta.nextCaptionNum || 1;
-      db.meta.nextCaptionNum = captionNum + 1;
-      const caption = {
-        id: genId(),
-        captionNum,
-        text: text.trim(),
-        addedBy: String(uid),
-        time: getBDTime(),
-        deleted: false,
-        timestamp: Date.now(),
-      };
-      if (!db.captions) db.captions = [];
-      db.captions.push(caption);
-      await writeDB(db);
+🆔 <b>Caption Added By User :</b>
+${uid}
 
-      // Notify admin
-      const botMsg = `🚨 <b>Alert: New Caption Added!</b>
+💬 <b>Caption :</b>
+${capData.text}
 
-📌 <b>Caption Number:</b> ${String(captionNum).padStart(2,'0')}
+🕒 <b>Added Time &amp; Date :</b>
+${bdTime(capData.timestamp)}
+`.trim();
 
-🆔 <b>Caption Added By User:</b> <code>${uid}</code>
+    try {
+      await sendTelegram('sendMessage', {
+        chat_id:    ADMIN_ID,
+        text,
+        parse_mode: 'HTML'
+      });
+    } catch (_) {}
 
-💬 <b>Caption:</b>
-${text}
-
-🕒 <b>Added Time &amp; Date:</b>
-${getBDTime()}`;
-      await sendTelegram(ADMIN_ID, botMsg);
-
-      return res.status(200).json({ ok: true, caption });
-    }
-
-    /* ---- EDIT CAPTION ---- */
-    if (action === 'edit') {
-      const cap = (db.captions || []).find(c => c.id === id);
-      if (!cap) return res.status(404).json({ ok: false, error: 'Caption not found' });
-      // Only owner or admin can edit
-      if (String(cap.addedBy) !== String(uid) && cap.addedBy !== 'admin') {
-        return res.status(403).json({ ok: false, error: 'Not authorized' });
-      }
-      cap.text = text.trim();
-      cap.editedAt = getBDTime();
-      await writeDB(db);
-      return res.status(200).json({ ok: true });
-    }
-
-    /* ---- DELETE CAPTION ---- */
-    if (action === 'delete') {
-      const cap = (db.captions || []).find(c => c.id === id);
-      if (!cap) return res.status(404).json({ ok: false, error: 'Caption not found' });
-      if (String(cap.addedBy) !== String(uid) && cap.addedBy !== 'admin') {
-        return res.status(403).json({ ok: false, error: 'Not authorized' });
-      }
-      cap.deleted = true;
-      await writeDB(db);
-      return res.status(200).json({ ok: true });
-    }
-
-    return res.status(400).json({ ok: false, error: 'Unknown action' });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(200).json({ success: true });
   }
-};
+
+  return res.status(400).json({ error: 'Unknown action' });
+}

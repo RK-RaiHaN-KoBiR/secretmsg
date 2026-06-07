@@ -1,143 +1,159 @@
-/* ============================================================
-   api/user.js — User Management Endpoint (Vercel Serverless)
-   ============================================================ */
+/**
+ * ═══════════════════════════════════════════════════════
+ *  /api/user.js — Vercel Serverless Function
+ *  Handles: IP lookup, new user alert, device info saving
+ * ═══════════════════════════════════════════════════════
+ */
 
-const { readDB, writeDB, genId } = require('./database');
+'use strict';
 
-const BOT_TOKEN  = process.env.BOT_TOKEN  || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID   = process.env.ADMIN_ID   || '6048050987';
-const TG_API     = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const BOT_TOKEN       = process.env.BOT_TOKEN       || "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA";
+const ADMIN_ID        = process.env.ADMIN_ID        || "6048050987";
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || "https://cithi-pathan-default-rtdb.firebaseio.com";
+const FIREBASE_SECRET = process.env.FIREBASE_SECRET || "";  // Optional: Firebase DB secret for write access
 
-async function sendTelegram(chatId, text, extra = {}) {
+/* ──────────────────────────────────────────────────────
+   TELEGRAM HELPER
+────────────────────────────────────────────────────── */
+async function sendTelegram(method, params) {
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
+  const res  = await fetch(url, {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(params)
+  });
+  return res.json();
+}
+
+/* ──────────────────────────────────────────────────────
+   BD TIME
+────────────────────────────────────────────────────── */
+function bdTime(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  return d.toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true
+  }).replace(',', ' —') + ' BD Time';
+}
+
+/* ──────────────────────────────────────────────────────
+   IP LOOKUP using ipapi.co (free, no key required)
+────────────────────────────────────────────────────── */
+async function lookupIP(ip) {
   try {
-    await fetch(`${TG_API}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
-    });
-  } catch {}
+    const r = await fetch(`https://ipapi.co/${ip}/json/`);
+    if (!r.ok) return {};
+    const d = await r.json();
+    return {
+      ip:      d.ip      || ip,
+      country: d.country_name || 'Unknown',
+      region:  d.region  || 'Unknown',
+      city:    d.city    || 'Unknown',
+      isp:     d.org     || 'Unknown',
+      postal:  d.postal  || ''
+    };
+  } catch (_) {
+    return { ip };
+  }
 }
 
-function getBDTime() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
-  const pad = n => String(n).padStart(2, '0');
-  let h = now.getHours(), m = now.getMinutes();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} — ${pad(h)}:${pad(m)} ${ampm} BD Time`;
+/* ──────────────────────────────────────────────────────
+   GET CLIENT IP from request headers
+────────────────────────────────────────────────────── */
+function getClientIP(req) {
+  return (
+    req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+    req.headers['x-real-ip'] ||
+    req.socket?.remoteAddress ||
+    'Unknown'
+  );
 }
 
-module.exports = async function handler(req, res) {
+/* ──────────────────────────────────────────────────────
+   MAIN HANDLER
+────────────────────────────────────────────────────── */
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const action = req.method === 'GET' ? req.query.action : (req.body && req.body.action);
+  const { action } = req.query;
 
-  try {
-    const db = await readDB();
+  /* ── GET /api/user?action=getip — Return IP & location info ── */
+  if (req.method === 'GET' && action === 'getip') {
+    const ip   = getClientIP(req);
+    const data = await lookupIP(ip);
+    return res.status(200).json(data);
+  }
 
-    /* ---- CREATE NEW USER ---- */
-    if (action === 'create') {
-      const uid = db.meta.nextUID;
-      db.meta.nextUID = uid + 1;
-      db.users[uid] = {
-        uid,
-        banned: false,
-        joinTime: getBDTime(),
-        lastActive: getBDTime(),
-        totalSent: 0,
-        totalReceived: 0,
-        notifEnabled: false,
-        cleared: false,
-      };
-      await writeDB(db);
-      return res.status(200).json({ ok: true, uid });
+  /* ── POST /api/user — New user registration alert ── */
+  if (req.method === 'POST') {
+    const body = req.body;
+    if (!body) return res.status(400).json({ error: 'No body' });
+
+    if (body.action === 'newUser') {
+      return handleNewUserAlert(body, req, res);
     }
+  }
 
-    /* ---- CHECK BAN ---- */
-    if (action === 'checkBan') {
-      const uid = req.query.uid;
-      const user = db.users[uid];
-      if (!user) return res.status(200).json({ banned: false });
-      return res.status(200).json({ banned: !!user.banned });
-    }
+  return res.status(405).json({ error: 'Method not allowed' });
+}
 
-    /* ---- NEW USER DEVICE INFO (POST) ---- */
-    if (action === 'newUser' && req.method === 'POST') {
-      const info = req.body.info || {};
-      const uid = info.uid;
-      if (db.users[uid]) {
-        db.users[uid].lastActive = getBDTime();
-        db.users[uid].deviceInfo = info;
-        await writeDB(db);
-      }
-      // Notify admin bot
-      const msg = `╔══════════════════════╗
+/* ──────────────────────────────────────────────────────
+   NEW USER ALERT → Telegram
+────────────────────────────────────────────────────── */
+async function handleNewUserAlert(body, req, res) {
+  const { uid, deviceInfo } = body;
+  const ip     = deviceInfo?.ip || getClientIP(req);
+  const ipData = await lookupIP(ip);
+
+  const d = { ...deviceInfo, ...ipData };
+
+  const text = `
+╔══════════════════════╗
 🆕 <b>NEW USER JOINED!</b>
 ╚══════════════════════╝
 
-📅 <b>Join Time & Date:</b>
-${info.joinTime || getBDTime()}
+📅 <b>Join Time &amp; Date :</b>
+${bdTime(Date.now())}
 
-🆔 <b>User ID:</b> ${uid}
+🆔 <b>User ID :</b> ${uid}
 
-📱 <b>Device Info:</b> ${info.deviceModel || 'Unknown'}
+📱 <b>Device Info :</b> ${d.userAgent?.substring(0, 80) || 'Unknown'}
 
-🔋 <b>Charging Status:</b> ${info.battery || 'Unknown'}
+🔋 <b>Battery :</b> ${d.battery ? `${d.battery.level} (${d.battery.charging})` : 'Unknown'}
 
-📶 <b>Network Info:</b> ${info.connection || 'Unknown'}
+📶 <b>Network :</b> ${d.network || 'Unknown'}
 
-🌍 <b>IP Address:</b> ${info.ip || 'Unknown'}
+🌍 <b>IP Address :</b> ${d.ip || 'Unknown'}
 
-🏙️ <b>Country:</b> ${info.country || 'Unknown'}
+🏙️ <b>Country :</b> ${d.country || 'Unknown'}
 
-🏠 <b>Division:</b> ${info.region || 'Unknown'}
+🏠 <b>Division :</b> ${d.region || 'Unknown'}
 
-📍 <b>Zilla:</b> ${info.city || 'Unknown'}
+📍 <b>City :</b> ${d.city || 'Unknown'}
 
-🏡 <b>City/Village:</b> ${info.city || 'Unknown'}
+📡 <b>ISP Provider :</b> ${d.isp || 'Unknown'}
 
-📡 <b>ISP Provider:</b> ${info.isp || 'Unknown'}
+📱 <b>Screen :</b> ${d.screen || 'Unknown'}
 
-📱 <b>Device Model:</b> ${info.deviceModel || 'Unknown'}
+💾 <b>RAM :</b> ${d.ram || 'Unknown'}
 
-💾 <b>RAM:</b> ${info.ram || 'Unknown'}
+🧠 <b>User Agent :</b>
+<code>${(d.userAgent || 'Unknown').substring(0, 200)}</code>
+`.trim();
 
-🧠 <b>User Agent:</b>
-<code>${(info.userAgent || '').slice(0, 200)}</code>`;
-      await sendTelegram(ADMIN_ID, msg);
-      return res.status(200).json({ ok: true });
-    }
-
-    /* ---- GET MESSAGES FOR USER ---- */
-    if (action === 'getMessages') {
-      const uid = String(req.query.uid);
-      const since = parseInt(req.query.since || '0');
-      // Get replies for this user
-      const userReplies = (db.replies || []).filter(r =>
-        String(r.toUID) === uid && !r.deleted && r.timestamp > since
-      );
-      // Get active broadcast
-      const broadcasts = (db.broadcasts || []);
-      const latestBroadcast = broadcasts.length ? broadcasts[broadcasts.length - 1] : null;
-      // Update last active
-      if (db.users[uid]) {
-        db.users[uid].lastActive = getBDTime();
-        db.users[uid].status = 'online';
-        await writeDB(db);
-      }
-      return res.status(200).json({
-        messages: userReplies.map(r => ({ id: r.id, text: r.text, time: r.time })),
-        broadcast: latestBroadcast,
-      });
-    }
-
-    return res.status(400).json({ ok: false, error: 'Unknown action' });
+  try {
+    await sendTelegram('sendMessage', {
+      chat_id:    ADMIN_ID,
+      text,
+      parse_mode: 'HTML'
+    });
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ error: err.message });
   }
-};
+}

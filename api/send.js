@@ -1,142 +1,198 @@
-/* ============================================================
-   api/send.js — Message Send Endpoint (Vercel Serverless)
-   ============================================================ */
+/**
+ * ═══════════════════════════════════════════════════════
+ *  /api/send.js — Vercel Serverless Function
+ *  Handles: new message → Telegram admin alert
+ *           seen report → Telegram seen notification
+ *           admin delete message
+ * ═══════════════════════════════════════════════════════
+ */
 
-const { readDB, writeDB, genId } = require('./database');
+'use strict';
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID  = process.env.ADMIN_ID  || '6048050987';
-const TG_API    = `https://api.telegram.org/bot${BOT_TOKEN}`;
-const SITE_URL  = process.env.SITE_URL  || 'https://cithipathao.vercel.app';
+/* ──────────────────────────────────────────────────────
+   ENVIRONMENT VARIABLES
+   Set these in Vercel Dashboard → Settings → Environment Variables
+────────────────────────────────────────────────────── */
+const BOT_TOKEN  = process.env.BOT_TOKEN  || "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA";
+const ADMIN_ID   = process.env.ADMIN_ID   || "6048050987";
+const FIREBASE_DB_URL = process.env.FIREBASE_DB_URL || "https://cithi-pathan-default-rtdb.firebaseio.com";
 
-function getBDTime() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
-  const pad = n => String(n).padStart(2, '0');
-  let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  return `${pad(h)}:${pad(m)} ${ampm} 🔸 ${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()} BD Time`;
-}
-
-async function sendTelegram(chatId, text, extra = {}) {
-  const res = await fetch(`${TG_API}/sendMessage`, {
-    method: 'POST',
+/* ──────────────────────────────────────────────────────
+   TELEGRAM API HELPER
+────────────────────────────────────────────────────── */
+async function sendTelegram(method, params) {
+  const url = `https://api.telegram.org/bot${BOT_TOKEN}/${method}`;
+  const res  = await fetch(url, {
+    method:  'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML', ...extra }),
+    body:    JSON.stringify(params)
   });
   return res.json();
 }
 
-module.exports = async function handler(req, res) {
+/* ──────────────────────────────────────────────────────
+   BD TIME FORMATTER
+────────────────────────────────────────────────────── */
+function bdTime(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  return d.toLocaleString('en-GB', {
+    timeZone:  'Asia/Dhaka',
+    day:       '2-digit',
+    month:     '2-digit',
+    year:      'numeric',
+    hour:      '2-digit',
+    minute:    '2-digit',
+    hour12:    true
+  }).replace(',', ' —') + ' BD Time';
+}
+
+/* ──────────────────────────────────────────────────────
+   MAIN HANDLER
+────────────────────────────────────────────────────── */
+export default async function handler(req, res) {
+  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ ok: false });
 
-  const body = req.body || {};
-  const action = body.action;
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
+  const body = req.body;
+  if (!body) return res.status(400).json({ error: 'No body' });
+
+  const { action } = body;
+
+  /* ── New Message from User ── */
+  if (!action || action === 'newMessage') {
+    return handleNewMessage(body, res);
+  }
+
+  /* ── Seen Report ── */
+  if (action === 'seenReport') {
+    return handleSeenReport(body, res);
+  }
+
+  /* ── Admin sends reply (webhook handles this in bot.js) ── */
+  return res.status(400).json({ error: 'Unknown action' });
+}
+
+/* ────────────────────────────────────────────────────── */
+async function handleNewMessage(body, res) {
+  const { msgData, uid } = body;
+  if (!msgData) return res.status(400).json({ error: 'No msgData' });
+
+  // Fetch device info from Firebase
+  let deviceInfo = {};
   try {
-    const db = await readDB();
+    const dbRes = await fetch(`${FIREBASE_DB_URL}/users/${uid}/deviceInfo.json`);
+    if (dbRes.ok) deviceInfo = await dbRes.json() || {};
+  } catch (_) {}
 
-    /* ---- SEND MESSAGE TO ADMIN ---- */
-    if (action === 'send') {
-      const { uid, msgId, text, name, wa, fb, time, anon, device, connection } = body;
-      const user = db.users[String(uid)] || {};
+  const d = deviceInfo;
 
-      // Increment send count
-      if (db.users[String(uid)]) {
-        db.users[String(uid)].totalSent = (db.users[String(uid)].totalSent || 0) + 1;
-        db.users[String(uid)].lastMsg = text.slice(0, 100);
-        db.users[String(uid)].lastActive = getBDTime();
-      }
-
-      // Store message
-      const msgRecord = {
-        id: genId(),
-        msgId,
-        fromUID: uid,
-        text,
-        time,
-        seen: false,
-        deleted: false,
-        timestamp: Date.now(),
-        name, wa, fb, anon,
-      };
-      if (!db.messages) db.messages = [];
-      db.messages.push(msgRecord);
-      await writeDB(db);
-
-      // Bot notification
-      const botMsg = `╔══════════════════════════════╗
-🔰 <b>𝗡𝗲𝘄 𝗠𝗲𝘀𝘀𝗮𝗴𝗲 𝗥𝗲𝗰𝗲𝗶𝘃𝗲𝗱 🔰</b>
+  /* ── Format notification message for Telegram ── */
+  const text = `
+╔══════════════════════════════╗
+🔰 <b>New Message Received</b> 🔰
 ╚══════════════════════════════╝
 
-🕒 <b>Send Time &amp; Date:</b> ${time}
+🕒 <b>Send Time &amp; Date :</b>
+${bdTime(msgData.timestamp)}
 
-🆔 <b>User ID:</b> <code>${uid}</code>
+🆔 <b>User ID :</b> ${uid}
 
-👤 <b>User Name:</b> ${anon ? 'Anonymous 🎭' : (name || 'Unknown')}
+👤 <b>User Name :</b> ${msgData.anonymous ? 'Unknown User (Anonymous)' : (msgData.name || 'Not Provided')}
 
-📱 <b>WhatsApp:</b> ${anon ? 'Hidden' : (wa || 'Not Added')}
+📱 <b>WhatsApp :</b> ${msgData.wa || '—'}
 
-🔗 <b>FB Link:</b> ${anon ? 'Hidden' : (fb || 'Not Added')}
+🔗 <b>FB Link :</b> ${msgData.fb || '—'}
 
-📲 <b>Device:</b> ${device || 'Unknown'}
+📱 <b>Device Info :</b> ${d.userAgent?.substring(0,80) || 'Unknown'}
 
-📶 <b>Network:</b> ${connection || 'Unknown'}
+🌍 <b>IP Address :</b> ${d.ip || 'Unknown'}
 
-━━━━━━━━━━━━━━━━━━━━━━━
-💌 <b>Message:</b>
+🏙️ <b>Country :</b> ${d.country || 'Unknown'}
 
-${text}
-━━━━━━━━━━━━━━━━━━━━━━━
+🏠 <b>Division :</b> ${d.region || 'Unknown'}
 
-🔘 Reply করার জন্য নিচের "Send Reply" Button ব্যবহার করুন।`;
+📍 <b>City :</b> ${d.city || 'Unknown'}
 
-      // Inline reply button
-      await sendTelegram(ADMIN_ID, botMsg, {
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '📩 Send Reply', callback_data: `reply_${uid}_${msgRecord.id}` }
-          ]]
-        }
-      });
+📡 <b>ISP :</b> ${d.isp || 'Unknown'}
 
-      return res.status(200).json({ ok: true, msgId });
-    }
+📶 <b>Network :</b> ${d.network || 'Unknown'}
 
-    /* ---- SEEN NOTIFICATION ---- */
-    if (action === 'seen') {
-      const { uid, msgId, seenTime } = body;
-      // Find the reply this user saw
-      const reply = (db.replies || []).find(r => String(r.toUID) === String(uid) && !r.seen);
-      if (reply && !reply.seenReported) {
-        reply.seen = true;
-        reply.seenTime = seenTime;
-        reply.seenReported = true;
-        await writeDB(db);
+🔋 <b>Battery :</b> ${d.battery ? `${d.battery.level} (${d.battery.charging})` : 'Unknown'}
 
-        const seenMsg = `╔══════════════════════╗
+💾 <b>RAM :</b> ${d.ram || 'Unknown'}
+
+🧠 <b>User Agent :</b>
+<code>${(d.userAgent || 'Unknown').substring(0,150)}</code>
+
+━━━━━━━━━━━━━━━━━━━━━━━━━
+💌 <b>Message :</b>
+
+${msgData.message || '(empty)'}
+━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔘 Reply করতে নিচের Button ব্যবহার করুন।
+`.trim();
+
+  /* ── Inline keyboard with Reply button ── */
+  const keyboard = {
+    inline_keyboard: [[
+      {
+        text: '📩 Send Reply',
+        callback_data: `reply_${uid}_${msgData.msgId}`
+      }
+    ]]
+  };
+
+  try {
+    await sendTelegram('sendMessage', {
+      chat_id:    ADMIN_ID,
+      text,
+      parse_mode: 'HTML',
+      reply_markup: keyboard
+    });
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+}
+
+/* ────────────────────────────────────────────────────── */
+async function handleSeenReport(body, res) {
+  const { uid, msgData } = body;
+  if (!uid) return res.status(400).json({ error: 'No uid' });
+
+  const text = `
+╔══════════════════════╗
 👁️ <b>MESSAGE SEEN REPORT</b>
 ╚══════════════════════╝
 
-🆔 <b>UserID:</b> <code>${uid}</code>
+🆔 <b>UserID :</b> ${uid}
 
-📤 <b>Reply Time:</b> ${reply.sentTime || '—'}
+📤 <b>Reply Time :</b>
+${bdTime(msgData?.timestamp)}
 
-👁️ <b>Seen Time:</b> ${seenTime}
+👁️ <b>Seen Time :</b>
+${bdTime(Date.now())}
 
-🔰 This User Seen Your Message ✅`;
-        await sendTelegram(ADMIN_ID, seenMsg);
-      }
-      return res.status(200).json({ ok: true });
-    }
+🔰 This User Seen Your Message ✅
+`.trim();
 
-    return res.status(400).json({ ok: false, error: 'Unknown action' });
+  try {
+    await sendTelegram('sendMessage', {
+      chat_id:    ADMIN_ID,
+      text,
+      parse_mode: 'HTML'
+    });
+    return res.status(200).json({ success: true });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ error: err.message });
   }
-};
+}
