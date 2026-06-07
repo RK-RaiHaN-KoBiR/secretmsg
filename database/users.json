@@ -1,15 +1,50 @@
 {
-  "meta": {
-    "nextUID": 1001,
-    "nextCaptionNum": 1,
-    "nextMsgId": 1,
-    "nextReplyId": 1,
-    "adsEnabled": true,
-    "createdAt": "2026-01-01"
-  },
-  "users": {},
-  "messages": [],
-  "replies": [],
-  "captions": [],
-  "broadcasts": []
+  "_comment": "এই ফাইলটি শুধু উদাহরণ structure দেখানোর জন্য। আসল ডেটা Firebase Realtime Database এ থাকে।",
+  "_note": "This file is a reference schema. Real data lives in Firebase.",
+
+  "1001": {
+    "uid": "1001",
+    "banned": false,
+    "lastActive": 1715699400000,
+    "profile": {
+      "name": "Example User",
+      "wa": "+8801XXXXXXXXX",
+      "fb": "https://facebook.com/example",
+      "registeredDate": 1715612345000,
+      "totalSend": 5,
+      "totalRecv": 3,
+      "notifAllowed": true
+    },
+    "deviceInfo": {
+      "userAgent": "Mozilla/5.0 (Linux; Android 11; SM-G991B) AppleWebKit/537.36",
+      "ip": "203.0.113.45",
+      "country": "Bangladesh",
+      "region": "Dhaka",
+      "city": "Dhaka",
+      "isp": "Grameenphone Ltd.",
+      "network": "4G",
+      "battery": { "level": "85%", "charging": "Discharging" },
+      "ram": "6GB",
+      "screen": "412x915"
+    },
+    "sendHistory": {
+      "01": {
+        "msgId": "01",
+        "uid": "1001",
+        "name": "Example User",
+        "message": "Hello Admin!",
+        "timestamp": 1715699300000,
+        "anonymous": false
+      }
+    },
+    "receivedMessages": {
+      "01": {
+        "msgId": "01",
+        "message": "Hello! How can I help you?",
+        "timestamp": 1715699400000,
+        "sentBy": "admin",
+        "seenAt": 1715699450000
+      }
+    }
+  }
 }
