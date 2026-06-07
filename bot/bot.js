@@ -1,195 +1,403 @@
-/* ============================================================
-   bot/bot.js — Cithi-Pathan Telegram Bot (Main Entry)
-   ============================================================ */
+/**
+ * ═══════════════════════════════════════════════════════
+ *  CITHI PATHAN — bot/bot.js
+ *  Main Telegram Bot Entry Point
+ *  Uses: Telegraf.js (webhook mode for Vercel)
+ * ═══════════════════════════════════════════════════════
+ */
 
 'use strict';
 
-const { readDB, writeDB, genId } = require('../api/database');
-const { handleCommand, handleCallbackQuery, handleAdminState } = require('./commands');
-const { setupWebhook } = require('./webhook');
+import { Telegraf, Markup, session } from 'telegraf';
+import { handleCommands }            from './commands.js';
+import { handleAdmin }               from './admin.js';
+import {
+  dbGet, dbSet, dbUpdate, dbDelete,
+  getAllUsers, getUser,
+  banUser, unbanUser, clearUser,
+  sendReplyToUser,
+  writeBroadcast,
+  getAllCaptions, addCaption, updateCaption, deleteCaption,
+  setAdsStatus, bumpVersion
+} from '../api/database.js';
 
-const BOT_TOKEN = process.env.BOT_TOKEN || '8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA';
-const ADMIN_ID  = parseInt(process.env.ADMIN_ID || '6048050987');
-const TG_API    = `https://api.telegram.org/bot${BOT_TOKEN}`;
+/* ──────────────────────────────────────────────────────
+   ① BOT CONFIG — set via .env / Vercel env vars
+────────────────────────────────────────────────────── */
+export const BOT_TOKEN  = process.env.BOT_TOKEN  || "8653934604:AAGE9O4iEkB62yxsXWEGOE2AS_TZNmmMxPA";
+export const ADMIN_ID   = process.env.ADMIN_ID   || "6048050987";
+export const SITE_URL   = process.env.SITE_URL   || "https://cithipathao.vercel.app";
 
-/* ---------- Global admin state (conversation context) ---------- */
-const adminState = {};  // { step, data }
+/* ──────────────────────────────────────────────────────
+   ② BOT INSTANCE
+────────────────────────────────────────────────────── */
+export const bot = new Telegraf(BOT_TOKEN);
 
-/* ---------- BD Time ---------- */
-function getBDTime() {
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Dhaka' }));
-  const pad = n => String(n).padStart(2, '0');
-  let h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  h = h % 12 || 12;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const dateStr = `${pad(now.getDate())}/${pad(now.getMonth()+1)}/${now.getFullYear()}`;
-  const timeStr = `${pad(h)}:${pad(m)} ${ampm}`;
-  return `${timeStr} 🔸 ${dateStr} BD Time`;
+/* ──────────────────────────────────────────────────────
+   ③ SESSION — tracks admin conversation state
+   e.g. "waiting for reply UID", "waiting for caption text"
+────────────────────────────────────────────────────── */
+bot.use(session({
+  defaultSession: () => ({
+    state:         null,   // 'await_reply_uid' | 'await_reply_msg' | 'await_caption' | 'await_edit_caption' | 'await_broadcast' | 'await_send_uid' | 'await_send_msg'
+    replyUID:      null,   // UID being replied to
+    editCaptionId: null,   // caption ID being edited
+    pendingMsgId:  null,   // original message msgId for inline reply
+  })
+}));
+
+/* ──────────────────────────────────────────────────────
+   ④ ADMIN GUARD — only ADMIN_ID can use this bot
+────────────────────────────────────────────────────── */
+export function isAdmin(ctx) {
+  return String(ctx.from?.id) === String(ADMIN_ID);
 }
 
-/* ---------- Send Telegram Message ---------- */
-async function sendMsg(chatId, text, extra = {}) {
-  try {
-    const res = await fetch(`${TG_API}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: 'HTML',
-        ...extra,
-      }),
-    });
-    return res.json();
-  } catch (e) {
-    console.error('sendMsg error:', e.message);
+bot.use(async (ctx, next) => {
+  if (!isAdmin(ctx)) {
+    return ctx.reply('🚫 Access Denied. This bot is for admin only.');
   }
+  return next();
+});
+
+/* ──────────────────────────────────────────────────────
+   ⑤ BD TIME FORMATTER
+────────────────────────────────────────────────────── */
+export function bdTime(ts) {
+  const d = ts ? new Date(ts) : new Date();
+  return d.toLocaleString('en-GB', {
+    timeZone: 'Asia/Dhaka',
+    day:      '2-digit',
+    month:    '2-digit',
+    year:     'numeric',
+    hour:     '2-digit',
+    minute:   '2-digit',
+    hour12:   true
+  }).replace(',', ' —') + ' BD Time';
 }
 
-/* ---------- Edit Telegram Message ---------- */
-async function editMsg(chatId, messageId, text, extra = {}) {
-  try {
-    await fetch(`${TG_API}/editMessageText`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, message_id: messageId, text, parse_mode: 'HTML', ...extra }),
+export function pad2(n) { return String(n).padStart(2, '0'); }
+
+/* ──────────────────────────────────────────────────────
+   ⑥ MAIN KEYBOARD — shown after every command
+────────────────────────────────────────────────────── */
+export const MAIN_KEYBOARD = Markup.keyboard([
+  ['📨 Send Message',   '📥 Received History'],
+  ['📤 Reply History',  '👥 Show All User'],
+  ['📢 Broadcast',      '📝 Caption BOX'],
+  ['🆘 Help']
+]).resize();
+
+/* ──────────────────────────────────────────────────────
+   ⑦ LOAD ALL HANDLERS
+────────────────────────────────────────────────────── */
+handleCommands(bot);
+handleAdmin(bot);
+
+/* ──────────────────────────────────────────────────────
+   ⑧ TEXT MESSAGE HANDLER (keyboard buttons + state machine)
+────────────────────────────────────────────────────── */
+bot.on('text', async (ctx) => {
+  const text = ctx.message.text.trim();
+  const sess = ctx.session;
+
+  /* ── State Machine: handle multi-step flows ── */
+
+  // Step: waiting for UID to send message
+  if (sess.state === 'await_send_uid') {
+    const uid = text.trim();
+    const user = await getUser(uid);
+    if (!user) {
+      sess.state = null;
+      return ctx.reply(`❌ User ID ${uid} পাওয়া যায়নি।`, MAIN_KEYBOARD);
+    }
+    sess.state    = 'await_send_msg';
+    sess.replyUID = uid;
+    return ctx.reply(`✅ User ID: <b>${uid}</b> পাওয়া গেছে!\n\n💌 এখন Message লিখুন:`, { parse_mode: 'HTML' });
+  }
+
+  // Step: waiting for message text to send
+  if (sess.state === 'await_send_msg') {
+    const uid     = sess.replyUID;
+    const msgData = await sendReplyToUser(uid, text, ADMIN_ID);
+    sess.state    = null;
+    sess.replyUID = null;
+
+    await ctx.reply(
+      `╔══════════════════════╗\n📤 <b>REPLY STATUS REPORT</b>\n╚══════════════════════╝\n\n✅ Reply Sent To User ID : <b>${uid}</b>\n\n🕒 <b>Time &amp; Date :</b>\n${bdTime()}\n\n⏳ <b>Status :</b>\nWait For User Seen Your Message!`,
+      { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+    );
+    return;
+  }
+
+  // Step: waiting for reply UID (from inline button flow)
+  if (sess.state === 'await_reply_uid') {
+    const uid  = text.trim();
+    const user = await getUser(uid);
+    if (!user) {
+      sess.state = null;
+      return ctx.reply(`❌ User ID ${uid} পাওয়া যায়নি।`, MAIN_KEYBOARD);
+    }
+    sess.state    = 'await_reply_msg';
+    sess.replyUID = uid;
+    return ctx.reply(`🆔 User <b>${uid}</b> কে Reply লিখুন:`, { parse_mode: 'HTML' });
+  }
+
+  // Step: waiting for reply message text
+  if (sess.state === 'await_reply_msg') {
+    const uid     = sess.replyUID;
+    const msgData = await sendReplyToUser(uid, text, ADMIN_ID);
+    sess.state    = null;
+    sess.replyUID = null;
+
+    await ctx.reply(
+      `╔══════════════════════╗\n📤 <b>REPLY STATUS REPORT</b>\n╚══════════════════════╝\n\n✅ Reply Sent To User ID : <b>${uid}</b>\n\n🕒 <b>Time &amp; Date :</b>\n${bdTime()}\n\n⏳ Status : Wait For User Seen Your Message!`,
+      { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+    );
+    return;
+  }
+
+  // Step: waiting for new caption text
+  if (sess.state === 'await_caption') {
+    const capData = await addCaption(text, 'admin');
+    sess.state = null;
+
+    await ctx.reply(
+      `✅ <b>Caption Successfully Added!</b>\n\n📌 Caption ID: <b>${capData.capId}</b>\n💬 ${text}\n\n🌐 Now visible on website instantly.`,
+      { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+    );
+    return;
+  }
+
+  // Step: waiting for edited caption text
+  if (sess.state === 'await_edit_caption') {
+    const capId = sess.editCaptionId;
+    await updateCaption(capId, text);
+    sess.state         = null;
+    sess.editCaptionId = null;
+
+    await ctx.reply(
+      `✅ <b>Caption Updated Successfully!</b>\n\n📌 Caption ID: ${capId}\n💬 ${text}\n\n🌐 Changes saved on website instantly.`,
+      { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+    );
+    return;
+  }
+
+  // Step: waiting for broadcast message
+  if (sess.state === 'await_broadcast') {
+    const bc = await writeBroadcast(text);
+    sess.state = null;
+
+    await ctx.reply(
+      `✅ <b>Broadcast Successfully Sent To Website All Users!</b>\n\n💬 Message:\n${text}\n\n🕒 Send Time :\n${bdTime()}`,
+      { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+    );
+    return;
+  }
+
+  /* ── Keyboard Button Handlers ── */
+  if (text === '📨 Send Message')      return handleSendMessageFlow(ctx);
+  if (text === '📥 Received History')  return handleReceivedHistory(ctx);
+  if (text === '📤 Reply History')     return handleReplyHistory(ctx);
+  if (text === '👥 Show All User')     return handleShowAllUsers(ctx);
+  if (text === '📢 Broadcast')         return handleBroadcastFlow(ctx);
+  if (text === '📝 Caption BOX')       return handleCaptionBox(ctx);
+  if (text === '🆘 Help')              return handleHelp(ctx);
+
+  // Unknown — show keyboard
+  return ctx.reply('অপশন সিলেক্ট করুন:', MAIN_KEYBOARD);
+});
+
+/* ══════════════════════════════════════════════════════
+   FLOW HANDLERS
+══════════════════════════════════════════════════════ */
+
+/* ── Send Message Flow ── */
+export async function handleSendMessageFlow(ctx) {
+  ctx.session.state = 'await_send_uid';
+  return ctx.reply('🆔 <b>Enter User ID</b>\n\nযে User কে message পাঠাবেন তার ID দিন:', { parse_mode: 'HTML' });
+}
+
+/* ── Received History ── */
+export async function handleReceivedHistory(ctx) {
+  const users = await getAllUsers();
+  let allMessages = [];
+
+  for (const user of users) {
+    if (!user.sendHistory) continue;
+    Object.values(user.sendHistory).forEach(msg => {
+      allMessages.push({ ...msg, uid: user.uid });
     });
-  } catch {}
-}
+  }
 
-/* ---------- Answer Callback Query ---------- */
-async function answerCB(callbackQueryId, text = '') {
-  try {
-    await fetch(`${TG_API}/answerCallbackQuery`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
-    });
-  } catch {}
-}
+  if (!allMessages.length) {
+    return ctx.reply('📭 কোনো Received Message নেই।', MAIN_KEYBOARD);
+  }
 
-/* ---------- Main Update Handler ---------- */
-async function handleUpdate(update) {
-  try {
-    /* --- Callback Query (inline button clicks) --- */
-    if (update.callback_query) {
-      const cb = update.callback_query;
-      const fromId = cb.from.id;
-      if (fromId !== ADMIN_ID) {
-        await answerCB(cb.id, '⛔ Unauthorized');
-        return;
+  allMessages.sort((a, b) => b.timestamp - a.timestamp);
+  const recent = allMessages.slice(0, 15);
+
+  for (const msg of recent) {
+    const text = `┌────────────────────────\n📨 <b>Msg ID:</b> ${msg.msgId}\n🆔 <b>User ID:</b> ${msg.uid}\n👤 <b>Name:</b> ${msg.name || 'Unknown'}\n💬 <b>Message:</b> ${msg.message}\n🕒 <b>Time:</b> ${bdTime(msg.timestamp)}\n└────────────────────────`;
+
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🗑️ Delete', callback_data: `del_sent_${msg.uid}_${msg.msgId}` },
+          { text: '📩 Reply',  callback_data: `reply_${msg.uid}_${msg.msgId}` }
+        ]]
       }
-      await answerCB(cb.id);
-      await handleCallbackQuery(cb, { sendMsg, editMsg, adminState, getBDTime, ADMIN_ID, BOT_TOKEN, TG_API });
-      return;
-    }
-
-    /* --- Message --- */
-    if (!update.message) return;
-    const msg  = update.message;
-    const from = msg.from;
-    const text = (msg.text || '').trim();
-    const chatId = msg.chat.id;
-
-    /* Only allow admin */
-    if (from.id !== ADMIN_ID) {
-      await sendMsg(chatId, '⛔ এই Bot শুধুমাত্র Admin ব্যবহার করতে পারবে।');
-      return;
-    }
-
-    /* If admin is in a multi-step state, handle it */
-    if (adminState[ADMIN_ID] && adminState[ADMIN_ID].step) {
-      await handleAdminState(msg, text, { sendMsg, adminState, getBDTime, ADMIN_ID, TG_API, readDB, writeDB, genId });
-      return;
-    }
-
-    /* Commands & keyboard text */
-    await handleCommand(msg, text, { sendMsg, adminState, getBDTime, ADMIN_ID, TG_API, readDB, writeDB, genId });
-
-  } catch (err) {
-    console.error('handleUpdate error:', err);
-  }
-}
-
-/* ---------- Polling (fallback if no webhook) ---------- */
-let offset = 0;
-async function poll() {
-  try {
-    const res = await fetch(`${TG_API}/getUpdates?offset=${offset}&timeout=30&limit=10`);
-    const data = await res.json();
-    if (data.ok && data.result.length) {
-      for (const update of data.result) {
-        offset = update.update_id + 1;
-        await handleUpdate(update);
-      }
-    }
-  } catch (e) {
-    console.error('Polling error:', e.message);
-  }
-  setTimeout(poll, 1000);
-}
-
-/* ---------- Webhook handler (exported for Vercel) ---------- */
-async function webhookHandler(req, res) {
-  if (req.method !== 'POST') return res.status(200).send('OK');
-  try {
-    await handleUpdate(req.body);
-  } catch (e) {
-    console.error('Webhook handler error:', e);
-  }
-  res.status(200).json({ ok: true });
-}
-
-/* ---------- Start ---------- */
-async function start() {
-  console.log('🤖 Cithi-Pathan Bot Starting...');
-
-  // Set bot commands
-  try {
-    await fetch(`${TG_API}/setMyCommands`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        commands: [
-          { command: 'start',        description: 'Open Welcome Menu' },
-          { command: 'send',         description: 'Send Reply To User' },
-          { command: 'received',     description: 'View Received Messages' },
-          { command: 'replyhistory', description: 'View Sent Replies History' },
-          { command: 'users',        description: 'Show All Registered Users' },
-          { command: 'broadcast',    description: 'Send Broadcast Notification' },
-          { command: 'caption',      description: 'Manage Website Captions' },
-          { command: 'help',         description: 'Open Help Menu' },
-          { command: 'ban',          description: 'Ban a User: /ban UID' },
-          { command: 'unban',        description: 'Unban a User: /unban UID' },
-          { command: 'info',         description: 'View User Info: /info UID' },
-          { command: 'delete',       description: 'Delete Message: /delete MSGID' },
-          { command: 'status',       description: 'View Bot Status Report' },
-          { command: 'ads',          description: 'Toggle Ads: /ads on or /ads off' },
-          { command: 'clear',        description: 'Clear User Data: /clear UID' },
-        ],
-      }),
     });
-    console.log('✅ Bot commands registered');
-  } catch (e) {
-    console.error('setMyCommands error:', e.message);
   }
 
-  // Check if WEBHOOK_URL is set, else use polling
-  const webhookUrl = process.env.WEBHOOK_URL;
-  if (webhookUrl) {
-    await setupWebhook(TG_API, webhookUrl);
-    console.log(`✅ Webhook set: ${webhookUrl}`);
-  } else {
-    console.log('🔄 Using long-polling...');
-    poll();
+  return ctx.reply(`✅ মোট ${allMessages.length} টি Message দেখানো হচ্ছে।`, MAIN_KEYBOARD);
+}
+
+/* ── Reply History ── */
+export async function handleReplyHistory(ctx) {
+  const users = await getAllUsers();
+  let allReplies = [];
+
+  for (const user of users) {
+    if (!user.receivedMessages) continue;
+    Object.values(user.receivedMessages).forEach(msg => {
+      allReplies.push({ ...msg, uid: user.uid });
+    });
   }
+
+  if (!allReplies.length) {
+    return ctx.reply('📭 কোনো Reply History নেই।', MAIN_KEYBOARD);
+  }
+
+  allReplies.sort((a, b) => b.timestamp - a.timestamp);
+  const recent = allReplies.slice(0, 15);
+
+  for (const msg of recent) {
+    const text = `┌────────────────────────\n📤 <b>Msg ID:</b> ${msg.msgId}\n🆔 <b>User ID:</b> ${msg.uid}\n💬 <b>Message:</b> ${msg.message}\n🕒 <b>Send Time:</b> ${bdTime(msg.timestamp)}\n👁️ <b>Seen:</b> ${msg.seenAt ? bdTime(msg.seenAt) : 'Not yet'}\n└────────────────────────`;
+
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '🗑️ Delete', callback_data: `del_recv_${msg.uid}_${msg.msgId}` }
+        ]]
+      }
+    });
+  }
+
+  return ctx.reply(`✅ মোট ${allReplies.length} টি Reply দেখানো হচ্ছে।`, MAIN_KEYBOARD);
 }
 
-/* Export for Vercel webhook route */
-module.exports = { webhookHandler, handleUpdate, sendMsg, getBDTime, ADMIN_ID, TG_API };
+/* ── Show All Users ── */
+export async function handleShowAllUsers(ctx) {
+  const users = await getAllUsers();
 
-/* Run if called directly */
-if (require.main === module) {
-  start().catch(console.error);
+  if (!users.length) {
+    return ctx.reply('👥 কোনো Registered User নেই।', MAIN_KEYBOARD);
+  }
+
+  await ctx.reply(
+    `╔══════════════════════════════╗\n👥 <b>REGISTERED USER ID LIST</b>\n╚══════════════════════════════╝\n\nমোট Users: <b>${users.length}</b>`,
+    { parse_mode: 'HTML' }
+  );
+
+  for (let i = 0; i < users.length; i++) {
+    const u    = users[i];
+    const name = u.profile?.name || 'Unknown';
+    const banned = u.banned ? '🔴 Banned' : '🟢 Active';
+
+    const text = `━━━━━━━━━━━━━━━━━━\n🔢 <b>Number :</b> ${i + 1}\n🆔 <b>User ID :</b> ${u.uid}\n👤 <b>Name :</b> ${name}\n🔴 <b>Status :</b> ${banned}`;
+
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔍 View Info',    callback_data: `info_${u.uid}` },
+            { text: '🗑️ Clear Data',  callback_data: `clear_${u.uid}` }
+          ],
+          [
+            { text: '🚫 Ban User',   callback_data: `ban_${u.uid}` },
+            { text: '✅ Unban User', callback_data: `unban_${u.uid}` }
+          ]
+        ]
+      }
+    });
+  }
+
+  return ctx.reply('✅ সব User দেখানো হয়েছে।', MAIN_KEYBOARD);
 }
+
+/* ── Broadcast Flow ── */
+export async function handleBroadcastFlow(ctx) {
+  ctx.session.state = 'await_broadcast';
+  return ctx.reply(
+    '📢 <b>Broadcast Message লিখুন:</b>\n\nসব User এর কাছে এই message পাঠানো হবে।',
+    { parse_mode: 'HTML' }
+  );
+}
+
+/* ── Caption Box ── */
+export async function handleCaptionBox(ctx) {
+  const captions = await getAllCaptions();
+
+  if (!captions.length) {
+    await ctx.reply('📝 কোনো Caption নেই। নতুন Caption add করুন:', {
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '➕ Add New Caption', callback_data: 'caption_add' }
+        ]]
+      }
+    });
+    return;
+  }
+
+  await ctx.reply(
+    `━━━━━━━━━━━━━━━━━━━━━━━\n🛠️ <b>CAPTION BOX</b>\n━━━━━━━━━━━━━━━━━━━━━━━\n\nমোট Captions: <b>${captions.length}</b>`,
+    { parse_mode: 'HTML' }
+  );
+
+  for (const cap of captions) {
+    const addedBy = cap.addedBy === 'admin' ? '👑 Admin' : `👤 User ${cap.addedBy}`;
+    const text = `━━━━━━━━━━━━━━━━━━━━━━━\n📌 <b>Caption ID:</b> ${cap.capId || cap._key}\n\n💬 ${cap.text}\n\n🕒 ${bdTime(cap.timestamp)}\n🆔 Added By: ${addedBy}`;
+
+    await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[
+          { text: '✏️ Edit',   callback_data: `caption_edit_${cap._key}` },
+          { text: '🗑️ Delete', callback_data: `caption_del_${cap._key}` }
+        ]]
+      }
+    });
+  }
+
+  return ctx.reply('➕ নতুন Caption add করতে:', {
+    reply_markup: {
+      inline_keyboard: [[
+        { text: '➕ Add New Caption', callback_data: 'caption_add' }
+      ]]
+    }
+  });
+}
+
+/* ── Help ── */
+export async function handleHelp(ctx) {
+  return ctx.reply(
+    `╔══════════════════════╗\n🤖 <b>BOT HELP &amp; COMMAND MENU</b>\n╚══════════════════════╝\n\n📌 <b>Available Commands:</b>\n\n/start → Open Welcome Menu\n/send → Send Reply To User\n/received → View Received Messages\n/replyhistory → View Sent Replies History\n/users → Show All Registered Users\n/broadcast → Send Broadcast Notification\n/caption → Manage Website Captions\n/help → Open Help Menu\n/ban [uid] → Ban Any User\n/unban [uid] → Unban Any User\n/info [uid] → View User Information\n/ads on|off → Toggle Ads\n/status → View Bot Status\n\n📌 <b>Keyboard Buttons:</b>\n\n📨 Send Message\n📥 Received History\n📤 Reply History\n👥 Show All User\n📢 Broadcast\n📝 Caption BOX\n🆘 Help\n\n✅ Keyboard + Command — দুইভাবেই Bot কাজ করবে।`,
+    { parse_mode: 'HTML', ...MAIN_KEYBOARD }
+  );
+}
+
+/* ══════════════════════════════════════════════════════
+   EXPORTS for webhook.js
+══════════════════════════════════════════════════════ */
+export {
+  handleSendMessageFlow, handleReceivedHistory, handleReplyHistory,
+  handleShowAllUsers, handleBroadcastFlow, handleCaptionBox, handleHelp,
+  getAllUsers, getUser, banUser, unbanUser, clearUser,
+  sendReplyToUser, writeBroadcast,
+  getAllCaptions, addCaption, updateCaption, deleteCaption,
+  setAdsStatus, bumpVersion, dbGet, dbSet, dbUpdate, dbDelete
+};
