@@ -1,143 +1,138 @@
-/**
- * ═══════════════════════════════════════════════════════
- *  CITHI PATHAN — sw.js (Service Worker)
- *  Handles: PWA caching, Push Notifications, Background Sync
- * ═══════════════════════════════════════════════════════
- */
+// =============================================
+// CITHI PATHAN - SERVICE WORKER (sw.js)
+// Handles push notifications & smart caching
+// Version: v2 (update this version string when
+// you deploy a site update so users get fresh files)
+// =============================================
 
-'use strict';
+const CACHE_NAME = 'cithi-pathan-v2';
 
-/* ──────────────────────────────────────────────────────
-   CACHE CONFIG — update CACHE_VERSION when deploying new files
-────────────────────────────────────────────────────── */
-const CACHE_VERSION = 'cithi-v1.0';
-const CACHE_ASSETS  = [
+// Core files to cache for offline support
+const CACHE_FILES = [
   '/',
   '/index.html',
-  '/style.css',
-  '/app.js',
+  '/css/style.css',
+  '/js/config.js',
+  '/js/app.js',
   '/manifest.json'
 ];
 
-/* ══════════════════════════════════════
-   INSTALL EVENT — cache static assets
-══════════════════════════════════════ */
-self.addEventListener('install', event => {
+// ---- Install: cache core files ----
+self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION)
-      .then(cache => cache.addAll(CACHE_ASSETS))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(CACHE_FILES))
   );
+  // Activate immediately without waiting for old SW to stop
+  self.skipWaiting();
 });
 
-/* ══════════════════════════════════════
-   ACTIVATE EVENT — clean old caches
-══════════════════════════════════════ */
-self.addEventListener('activate', event => {
+// ---- Activate: clean up old caches ----
+self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
         keys
-          .filter(key => key !== CACHE_VERSION)
-          .map(key => caches.delete(key))
+          .filter(k => k !== CACHE_NAME)
+          .map(k => caches.delete(k))
       )
-    ).then(() => self.clients.claim())
+    )
+  );
+  // Take control of all open pages immediately
+  self.clients.claim();
+});
+
+// ---- Fetch: network-first for HTML, cache-first for assets ----
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  if (!event.request.url.startsWith(self.location.origin)) return;
+
+  const url = new URL(event.request.url);
+
+  // API calls: always network, never cache
+  if (url.pathname.startsWith('/api/')) return;
+
+  // HTML pages: network-first (so site updates reach users)
+  if (event.request.headers.get('accept') && event.request.headers.get('accept').includes('text/html')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          if (response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // Other assets (CSS, JS, icons): cache-first
+  event.respondWith(
+    caches.match(event.request).then(cached => {
+      if (cached) return cached;
+      return fetch(event.request).then(response => {
+        if (response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+        }
+        return response;
+      });
+    }).catch(() => caches.match('/index.html'))
   );
 });
 
-/* ══════════════════════════════════════
-   FETCH EVENT — serve from cache, fallback to network
-══════════════════════════════════════ */
-self.addEventListener('fetch', event => {
-  const { request } = event;
-  const url = new URL(request.url);
+// ---- Push notification received ----
+self.addEventListener('push', (event) => {
+  let data = {
+    title: '💌 চিঠি পাঠান',
+    body:  'You have a new message!',
+    url:   '/'
+  };
 
-  // Skip non-GET and API routes
-  if (request.method !== 'GET' || url.pathname.startsWith('/api/')) return;
+  if (event.data) {
+    try {
+      data = { ...data, ...event.data.json() };
+    } catch {
+      data.body = event.data.text();
+    }
+  }
 
-  event.respondWith(
-    caches.match(request).then(cached => {
-      if (cached) return cached;
-      return fetch(request).then(response => {
-        // Cache successful responses for same-origin requests
-        if (response.ok && url.origin === self.location.origin) {
-          const clone = response.clone();
-          caches.open(CACHE_VERSION).then(c => c.put(request, clone));
-        }
-        return response;
-      }).catch(() => {
-        // Offline fallback — return cached index.html for navigation
-        if (request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
-      });
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body:             data.body,
+      icon:             '/icons/icon-192.png',
+      badge:            '/icons/badge-72.png',
+      tag:              'cithi-notification',   // same tag = replaces previous notification
+      data:             { url: data.url || '/' },
+      requireInteraction: false,
+      vibrate:          [200, 100, 200]
     })
   );
 });
 
-/* ══════════════════════════════════════
-   PUSH EVENT — show notification
-══════════════════════════════════════ */
-self.addEventListener('push', event => {
-  let data = {};
-  try {
-    data = event.data ? event.data.json() : {};
-  } catch (_) {
-    data = { title: '💌 চিঠি পাঠান', body: event.data?.text() || 'নতুন বার্তা এসেছে!' };
-  }
-
-  const title   = data.title   || '💌 চিঠি পাঠান — Cithi Pathan';
-  const body    = data.body    || 'You Have Received New Notification From Admin – Click To Open';
-  const icon    = data.icon    || '/icons/icon-192.png';
-  const badge   = data.badge   || '/icons/badge.png';
-  const tag     = data.tag     || 'cithi-notification';
-  const url     = data.url     || '/';
-
-  const options = {
-    body,
-    icon,
-    badge,
-    tag,
-    requireInteraction: false,
-    vibrate: [200, 100, 200],
-    data: { url },
-    actions: [
-      { action: 'open',  title: '📖 Open' },
-      { action: 'close', title: '❌ Dismiss' }
-    ]
-  };
-
-  event.waitUntil(self.registration.showNotification(title, options));
-});
-
-/* ══════════════════════════════════════
-   NOTIFICATION CLICK — open the website
-══════════════════════════════════════ */
-self.addEventListener('notificationclick', event => {
+// ---- Notification click: open website ----
+self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-
-  if (event.action === 'close') return;
-
-  const targetUrl = event.notification.data?.url || '/';
+  const url = event.notification.data?.url || '/';
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(clientList => {
-        // Focus existing window if open
-        for (const client of clientList) {
-          if (client.url === targetUrl && 'focus' in client) {
-            return client.focus();
-          }
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+      // Focus existing tab if open
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          return client.focus();
         }
-        // Open new window
-        if (clients.openWindow) return clients.openWindow(targetUrl);
-      })
+      }
+      // Open new tab
+      return clients.openWindow(url);
+    })
   );
 });
 
-/* ══════════════════════════════════════
-   MESSAGE EVENT — communication with app.js
-══════════════════════════════════════ */
-self.addEventListener('message', event => {
-  if (event.data === 'skipWaiting') self.skipWaiting();
+// ---- Message from main app (for manual cache clear on update) ----
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

@@ -4,24 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#000000" />
-  <meta name="description" content="চিঠি পাঠান - Anonymous Secret Message Platform" />
-  <title>💌 চিঠি পাঠান - Cithi Pathan</title>
-
-  <!-- PWA Manifest -->
+  <title>চিঠি পাঠান - Cithi Pathan 💌</title>
   <link rel="manifest" href="/manifest.json" />
-
-  <!-- Google Fonts -->
+  <link rel="stylesheet" href="/css/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@300;400;500;600;700&family=Playfair+Display:wght@700;900&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet" />
-
-  <!-- Styles -->
-  <link rel="stylesheet" href="/style.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Cinzel+Decorative:wght@700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
 </head>
 <body>
 
-<!-- ═══════════════════════════════════════
+<!-- ============================================
      LOADING SCREEN
-════════════════════════════════════════ -->
+============================================ -->
 <div id="loadingScreen">
   <div class="loading-border-frame">
     <div class="loading-heart-container">
@@ -33,381 +26,325 @@
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     BAN SCREEN (hidden by default)
-════════════════════════════════════════ -->
-<div id="banScreen" style="display:none;">
+<!-- ============================================
+     FLOATING EMOJI BACKGROUND
+============================================ -->
+<div id="floatingEmojis" class="floating-emojis"></div>
+
+<!-- ============================================
+     BAN SCREEN (shown if user is banned)
+============================================ -->
+<div id="banScreen" class="ban-screen hidden">
   <div class="ban-box">
     <div class="ban-header">🚫 ACCESS DENIED!</div>
     <p>Your account has been temporarily restricted.</p>
     <p>You are not allowed to access this website at the moment.</p>
     <p>If you believe this is a mistake, please contact the admin for assistance.</p>
-    <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" class="ban-link">📧 Contact Admin</a>
+    <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" class="ban-contact-btn">📧 Contact Admin</a>
   </div>
 </div>
 
-<!-- ═══════════════════════════════════════
-     MAIN APP WRAPPER
-════════════════════════════════════════ -->
-<div id="mainApp" style="display:none;">
+<!-- ============================================
+     MAIN WEBSITE WRAPPER
+============================================ -->
+<div id="mainApp" class="main-app hidden">
 
-  <!-- Floating emoji background -->
-  <div id="floatingEmojis" aria-hidden="true"></div>
-
-  <!-- ── TOP BAR ── -->
+  <!-- TOP BAR -->
   <div class="top-bar">
-    <!-- UID Badge -->
-    <div class="uid-badge">【 My UID: <span id="topUID">----</span> 】</div>
-
-    <!-- 3-dot menu -->
-    <button class="three-dot-btn" id="threeDotBtn" aria-label="Menu">
-      <span class="dot"></span>
-      <span class="dot"></span>
-      <span class="dot"></span>
+    <div class="uid-badge" id="uidBadge">【 My UID: ---- 】</div>
+    <button class="three-dot-btn" id="threeDotBtn" title="Menu">
+      <span></span><span></span><span></span>
     </button>
   </div>
 
-  <!-- ── DROPDOWN MENU ── -->
-  <div class="dropdown-menu" id="dropdownMenu">
-    <div class="dropdown-item home-item" data-section="home">🏠 Home</div>
-    <div class="dropdown-item purple-item" data-section="sendHistory">🟣 Send History</div>
-    <div class="dropdown-item blue-item" data-section="receivedHistory">🔵 Received History</div>
-    <div class="dropdown-item green-item" data-section="captionBox">🟢 Caption BOX</div>
-    <div class="dropdown-item yellow-item" data-section="myProfile">🟡 My Profile</div>
-    <div class="dropdown-item red-item" data-section="helpSection">🔴 Help</div>
+  <!-- THREE DOT DROPDOWN MENU -->
+  <div id="dropdownMenu" class="dropdown-menu hidden">
+    <div class="dropdown-item purple-glow" onclick="openSection('sendHistory')">🟣 Send History</div>
+    <div class="dropdown-item blue-glow" onclick="openSection('receivedHistory')">🔵 Received History</div>
+    <div class="dropdown-item green-glow" onclick="openSection('captionBox')">🟢 Caption BOX</div>
+    <div class="dropdown-item yellow-glow" onclick="openSection('myProfile')">🟡 My Profile</div>
+    <div class="dropdown-item red-glow" onclick="openSection('helpSection')">🔴 Help</div>
   </div>
 
-  <!-- ═══ BANNER ═══ -->
-  <header class="main-banner">
-    <div class="banner-inner">
-      <div class="banner-title-frame">
-        <h1 class="banner-title">📩 Cithi Pathan 🔹 চিঠি পাঠান 📩</h1>
-      </div>
-      <p class="banner-subtitle">💖 Secret Message BOX 🔸 মনের অনুভূতি প্রকাশ করুন নিজের পরিচয় লুকিয়ে 💖</p>
+  <!-- BANNER -->
+  <div class="banner">
+    <div class="banner-frame">
+      <div class="banner-title">📩 Cithi Pathan 🔹 চিঠি পাঠান 📩</div>
+      <div class="banner-subtitle">💖 Secret Message BOX 🔸 মনের অনুভূতি প্রকাশ করুন নিজের পরিচয় লুকিয়ে 💖</div>
     </div>
-  </header>
+  </div>
 
-  <!-- ═══ CLOCK CIRCLE ═══ -->
+  <!-- CLOCK CIRCLE -->
   <div class="clock-section">
-    <div class="clock-ring">
-      <div class="clock-inner">
-        <div class="clock-time" id="clockTime">--:--:-- --</div>
-        <div class="clock-date" id="clockDate">-- --- ----</div>
-      </div>
+    <div class="clock-circle" id="clockCircle">
+      <div class="clock-time" id="clockTime">--:--:-- --</div>
+      <div class="clock-date" id="clockDate">-- --- ----</div>
     </div>
   </div>
 
-  <!-- ═══ CAPTION FRAME (static intro) ═══ -->
-  <section class="caption-frame" id="captionFrame">
-    <div class="caption-frame-inner">
-      <div class="caption-header">★━━━━━━━━━━━━━━━━━━━━━━★<br>🌸💌 চিঠি 🔸 পাঠান 💌🌸<br>★━━━━━━━━━━━━━━━━━━━━━━★</div>
-      <div class="caption-body" id="captionBody">
-        কিছু কথা হৃদয়ের ভিতর লুকিয়ে থাকে…<br>
-        যা কাউকে সরাসরি বলা সম্ভব হয় না...। 🌺<br><br>
-        মনের কিছু অনুভূতি থাকে,<br>
-        যেগুলো শুধু অনুভব করা যায় কিন্তু প্রকাশ করা যায় না…। 💖<br><br>
-        এখানে আপনি সেই না বলা অনুভূতিগুলো<br>
-        খুব সহজেই শেয়ার করতে পারবেন...। 🌸<br><br>
-        চাইলে নিজের পরিচয় গোপন রেখেও<br>
-        সম্পূর্ণ নিরাপদভাবে মেসেজ পাঠাতে পারবেন...। 🔒💌<br><br>
-        ভালোবাসা, অভিমান, কষ্ট, অপেক্ষা কিংবা<br>
-        মনের গভীরে লুকিয়ে থাকা অজানা অনুভূতি —<br>
-        সবকিছুই নিরাপদভাবে প্রকাশ করুন এখানে...। 💞<br><br>
-        🔒 আপনার সকল তথ্য, পরিচয় ও মেসেজ<br>
-        সম্পূর্ণ সুরক্ষিত ও নিরাপদভাবে সংরক্ষিত থাকবে...। 🌺
+  <!-- CAPTION FRAME (Home Page Poem) -->
+  <div class="caption-poem-frame">
+    <div class="caption-poem-title">🌸💌 চিঠি 🔸 পাঠান 💌🌸</div>
+    <div class="caption-poem-body" id="captionPoemText">
+      <p>কিছু কথা হৃদয়ের ভিতর লুকিয়ে থাকে…<br/>যা কাউকে সরাসরি বলা সম্ভব হয় না...। 🌺</p>
+      <p>মনের কিছু অনুভূতি থাকে,<br/>যেগুলো শুধু অনুভব করা যায় কিন্তু প্রকাশ করা যায় না…। 💖</p>
+      <p>এখানে আপনি সেই না বলা অনুভূতিগুলো<br/>খুব সহজেই শেয়ার করতে পারবেন...। 🌸</p>
+      <p>চাইলে নিজের পরিচয় গোপন রেখেও<br/>সম্পূর্ণ নিরাপদভাবে মেসেজ পাঠাতে পারবেন...। 🔒💌</p>
+      <p>আবার চাইলে নিজের পরিচয়সহও<br/>মনের কথা পৌঁছে দিতে পারবেন প্রিয় মানুষটির কাছে...। 🌺</p>
+      <p>ভালোবাসা, অভিমান, কষ্ট, অপেক্ষা কিংবা<br/>মনের গভীরে লুকিয়ে থাকা অজানা অনুভূতি —<br/>সবকিছুই নিরাপদভাবে প্রকাশ করুন এখানে...। 💞</p>
+      <p>🔒 আপনার সকল তথ্য, পরিচয় ও মেসেজ<br/>সম্পূর্ণ সুরক্ষিত ও নিরাপদভাবে সংরক্ষিত থাকবে...। 🌺</p>
+    </div>
+  </div>
+
+  <!-- MESSAGE SEND SECTION -->
+  <div class="send-section">
+    <div class="send-section-frame">
+
+      <!-- Instruction Header -->
+      <div class="instruction-header">
+        <p class="inst-red">[1] Enter Your Name <span class="opt-tag">(Optional)</span></p>
+        <p class="inst-green">[2] Enter WhatsApp Number <span class="opt-tag">(Optional)</span></p>
+        <p class="inst-purple">[3] Enter FB ID Link <span class="opt-tag">(Optional)</span></p>
+        <p class="inst-note">(এই ইনফরমেশনগুলো আপনি চাইলে ফাকা রাখতে পারবেন)</p>
       </div>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════
-       HOME SECTION — Message Send Form
-  ════════════════════════════════════════ -->
-  <section class="section active" id="homeSection">
-
-    <!-- Instruction box -->
-    <div class="instruction-box">
-      <p class="inst-text red-text">[1] Enter Your Name <span class="opt">(Optional)</span></p>
-      <p class="inst-text green-text">[2] Enter WhatsApp Number <span class="opt">(Optional)</span></p>
-      <p class="inst-text purple-text">[3] Enter FB ID Link <span class="opt">(Optional)</span></p>
-      <p class="inst-note">(এই ইনফরমেশনগুলো আপনি চাইলে ফাঁকা রাখতে পারবেন)</p>
-    </div>
-
-    <!-- Input Fields -->
-    <div class="input-group red-border">
-      <label class="field-label red-text">[1] Enter Your Name :</label>
-      <input type="text" id="senderName" class="field-input" placeholder="আপনার নাম লিখুন..." autocomplete="name" />
-    </div>
-
-    <div class="input-group green-border">
-      <label class="field-label green-text">[2] WhatsApp Number :</label>
-      <input type="tel" id="senderWA" class="field-input" placeholder="+8801XXXXXXXXX" autocomplete="tel" />
-    </div>
-
-    <div class="input-group purple-border">
-      <label class="field-label purple-text">[3] Enter Your FB ID Link :</label>
-      <input type="url" id="senderFB" class="field-input" placeholder="https://facebook.com/..." autocomplete="url" />
-    </div>
-
-    <!-- Anonymous checkbox -->
-    <div class="anon-box">
-      <label class="anon-label">
-        <input type="checkbox" id="anonCheck" />
-        <span class="anon-custom"></span>
-        <span class="anon-text">☑️ আমি নিজের পরিচয় গোপন রেখে মেসেজ পাঠাতে চাই ...!</span>
-      </label>
-      <p class="anon-note">(এখানে আপনি নিজের পরিচয় গোপন রেখেও মেসেজ পাঠাতে পারবেন...!)</p>
-    </div>
-
-    <!-- Message Box -->
-    <div class="message-box-wrapper">
-      <textarea id="msgInput" class="message-textarea" maxlength="10000"
-        placeholder="বলতে না পারা মনের কথা এখানে লিখুন...!"></textarea>
-      <div class="char-count"><span id="charCount">0</span> / 10000</div>
-    </div>
-
-    <!-- Send Button -->
-    <button class="send-btn ripple" id="sendBtn">
-      🔰 Send Messages 🔰
-    </button>
-
-  </section>
-
-  <!-- ═══════════════════════════════════════
-       SEND HISTORY SECTION
-  ════════════════════════════════════════ -->
-  <section class="section" id="sendHistorySection">
-    <div class="section-header purple-glow">
-      <span>🟣 Send History</span>
-      <div class="section-controls">
-        <button class="ctrl-btn" onclick="goHome()">🔙 Back</button>
-        <button class="ctrl-btn" onclick="closeSection('sendHistorySection')">❌ Close</button>
+      <!-- Input Fields -->
+      <div class="input-group border-red">
+        <label class="input-label red-label">[1] আপনার নাম লিখুন :</label>
+        <input type="text" id="inputName" class="styled-input" placeholder="Your Name (Optional)" autocomplete="name" />
       </div>
-    </div>
-    <div class="history-list" id="sendHistoryList">
-      <div class="empty-msg">কোনো পাঠানো মেসেজ নেই।</div>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════
-       RECEIVED HISTORY SECTION
-  ════════════════════════════════════════ -->
-  <section class="section" id="receivedHistorySection">
-    <div class="section-header blue-glow">
-      <span>🔵 Received History</span>
-      <div class="section-controls">
-        <button class="ctrl-btn" onclick="goHome()">🔙 Back</button>
-        <button class="ctrl-btn" onclick="closeSection('receivedHistorySection')">❌ Close</button>
+      <div class="input-group border-green">
+        <label class="input-label green-label">[2] WhatsApp Number :</label>
+        <input type="tel" id="inputWhatsapp" class="styled-input" placeholder="WhatsApp Number (Optional)" autocomplete="tel" />
       </div>
-    </div>
-    <div class="history-list" id="receivedHistoryList">
-      <div class="empty-msg">কোনো প্রাপ্ত মেসেজ নেই।</div>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════
-       CAPTION BOX SECTION
-  ════════════════════════════════════════ -->
-  <section class="section" id="captionBoxSection">
-    <div class="section-header green-glow">
-      <span>🟢 Caption BOX</span>
-      <div class="section-controls">
-        <button class="ctrl-btn" onclick="goHome()">🔙 Back</button>
-        <button class="ctrl-btn" onclick="closeSection('captionBoxSection')">❌ Close</button>
+      <div class="input-group border-purple">
+        <label class="input-label purple-label">[3] Facebook ID Link :</label>
+        <input type="url" id="inputFbLink" class="styled-input" placeholder="https://facebook.com/... (Optional)" autocomplete="url" />
       </div>
-    </div>
-    <div class="caption-list" id="captionList">
-      <div class="empty-msg">কোনো caption নেই।</div>
-    </div>
-    <!-- Add caption -->
-    <div class="add-caption-area">
-      <textarea id="newCaptionInput" class="field-input" rows="3" placeholder="✏️ নতুন caption লিখুন..."></textarea>
-      <button class="save-btn ripple" onclick="addCaption()">🔘 Save Caption</button>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════
-       MY PROFILE SECTION
-  ════════════════════════════════════════ -->
-  <section class="section" id="myProfileSection">
-    <div class="section-header yellow-glow">
-      <span>🟡 My Profile</span>
-      <div class="section-controls">
-        <button class="ctrl-btn" onclick="goHome()">🔙 Back</button>
-        <button class="ctrl-btn" onclick="closeSection('myProfileSection')">❌ Close</button>
+      <!-- Anonymous Checkbox -->
+      <div class="anon-checkbox-wrapper">
+        <label class="anon-label">
+          <input type="checkbox" id="anonCheck" />
+          <span class="anon-text">☑️ আমি নিজের পরিচয় গোপন রেখে মেসেজ পাঠাতে চাই ...!</span>
+        </label>
+        <p class="anon-hint">🔒 (এখানে আপনি নিজের পরিচয় গোপন রেখেও মেসেজ পাঠাতে পারবেন...!)</p>
       </div>
-    </div>
-    <div class="profile-box">
-      <div class="profile-row"><span class="pkey">🆔 My ID</span><span class="pval" id="pUID">----</span></div>
-      <div class="profile-row"><span class="pkey">✏️ Name</span><span class="pval" id="pName">—</span></div>
-      <div class="profile-row"><span class="pkey">📱 WhatsApp</span><span class="pval" id="pWA">—</span></div>
-      <div class="profile-row"><span class="pkey">🌐 FB Link</span><span class="pval" id="pFB">—</span></div>
-      <div class="profile-row"><span class="pkey">💌 Total Send</span><span class="pval" id="pSend">0</span></div>
-      <div class="profile-row"><span class="pkey">📩 Total Receive</span><span class="pval" id="pRecv">0</span></div>
-      <div class="profile-row"><span class="pkey">📅 Registered</span><span class="pval" id="pReg">—</span></div>
-      <div class="profile-row">
-        <span class="pkey">🔔 Notification</span>
-        <span class="pval" id="pNotif">Disabled — <a href="#" onclick="requestNotifPermission();return false;" class="enable-link">Enable Now</a></span>
-      </div>
-    </div>
-    <button class="save-btn ripple" onclick="openEditProfile()">✏️ Edit Profile</button>
 
-    <!-- Edit Profile popup -->
-    <div class="edit-profile-popup" id="editProfilePopup" style="display:none;">
-      <div class="edit-profile-box">
-        <h3 class="popup-title">✏️ Edit Profile</h3>
-        <input type="text" id="editName" class="field-input" placeholder="Your Name" autocomplete="name" />
-        <input type="tel" id="editWA" class="field-input" placeholder="WhatsApp Number" autocomplete="tel" />
-        <input type="url" id="editFB" class="field-input" placeholder="FB Profile Link" autocomplete="url" />
-        <div class="popup-btns">
-          <button class="save-btn ripple" onclick="saveProfile()">💾 Save</button>
-          <button class="ctrl-btn" onclick="closeEditProfile()">❌ Cancel</button>
-        </div>
+      <!-- Message Box -->
+      <div class="message-box-wrapper">
+        <textarea id="messageInput" class="message-textarea" placeholder="বলতে না পারা মনের কথা এখানে লিখুন...!" maxlength="10000"></textarea>
+        <div class="char-count"><span id="charCount">0</span>/10000</div>
       </div>
-    </div>
-  </section>
 
-  <!-- ═══════════════════════════════════════
-       HELP SECTION
-  ════════════════════════════════════════ -->
-  <section class="section" id="helpSection">
-    <div class="section-header red-glow">
-      <span>🔴 Help</span>
-      <div class="section-controls">
-        <button class="ctrl-btn" onclick="goHome()">🔙 Back</button>
-        <button class="ctrl-btn" onclick="closeSection('helpSection')">❌ Close</button>
-      </div>
+      <!-- Send Button -->
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        🔰 Send Messages 🔰
+      </button>
+
     </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-section">
+    <div class="footer-frame">
+      <p class="footer-text">💌 কোনো সমস্যা হলে Admin-এর সাথে যোগাযোগ করুন।</p>
+      <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" class="footer-btn contact-btn">📩 Contact Admin</a>
+      <a href="https://t.me/rksystemall" target="_blank" class="footer-btn telegram-btn">🚀 Join Telegram Channel</a>
+    </div>
+  </div>
+
+  <!-- ADS SECTION (Bottom Fixed - 30% chance on load/click) -->
+  <div id="adContainer" class="ad-container hidden">
+    <div class="ad-frame">
+      <div class="ad-close-btn" onclick="closeAd()">✕</div>
+      <div class="ad-label">Advertisement</div>
+      <script>
+        atOptions = {
+          'key': 'fe838c7a3a587438465d623ec79cf888',
+          'format': 'iframe',
+          'height': 50,
+          'width': 320,
+          'params': {}
+        };
+      </script>
+      <script src="https://www.highperformanceformat.com/fe838c7a3a587438465d623ec79cf888/invoke.js"></script>
+    </div>
+  </div>
+
+</div><!-- end mainApp -->
+
+<!-- ============================================
+     SECTION PANELS (Overlay Panels)
+============================================ -->
+
+<!-- Send History Panel -->
+<div id="sendHistory" class="section-panel hidden">
+  <div class="panel-header purple-header">
+    <button class="back-btn" onclick="closeSection('sendHistory')">🔙 Back</button>
+    <span class="panel-title">🟣 Send History</span>
+    <button class="close-btn" onclick="closeSection('sendHistory')">❌</button>
+  </div>
+  <div class="panel-body" id="sendHistoryList">
+    <div class="empty-state">📭 কোনো Message নেই এখনো।</div>
+  </div>
+</div>
+
+<!-- Received History Panel -->
+<div id="receivedHistory" class="section-panel hidden">
+  <div class="panel-header blue-header">
+    <button class="back-btn" onclick="closeSection('receivedHistory')">🔙 Back</button>
+    <span class="panel-title">🔵 Received History</span>
+    <button class="close-btn" onclick="closeSection('receivedHistory')">❌</button>
+  </div>
+  <div class="panel-body" id="receivedHistoryList">
+    <div class="empty-state">📭 কোনো Reply আসেনি এখনো।</div>
+  </div>
+</div>
+
+<!-- Caption Box Panel -->
+<div id="captionBox" class="section-panel hidden">
+  <div class="panel-header green-header">
+    <button class="back-btn" onclick="closeSection('captionBox')">🔙 Back</button>
+    <span class="panel-title">🟢 Caption BOX</span>
+    <button class="close-btn" onclick="closeSection('captionBox')">❌</button>
+  </div>
+  <div class="panel-body">
+    <!-- Add Caption -->
+    <div class="add-caption-box">
+      <label class="input-label green-label">✏️ নতুন Caption লিখুন :</label>
+      <textarea id="newCaptionInput" class="caption-textarea" placeholder="আপনার caption এখানে লিখুন..."></textarea>
+      <button class="caption-save-btn" onclick="saveCaption()">🔘 Save Caption</button>
+    </div>
+    <!-- Caption List -->
+    <div id="captionList">
+      <div class="empty-state">📝 কোনো Caption নেই এখনো।</div>
+    </div>
+  </div>
+</div>
+
+<!-- My Profile Panel -->
+<div id="myProfile" class="section-panel hidden">
+  <div class="panel-header yellow-header">
+    <button class="back-btn" onclick="closeSection('myProfile')">🔙 Back</button>
+    <span class="panel-title">🟡 My Profile</span>
+    <button class="close-btn" onclick="closeSection('myProfile')">❌</button>
+  </div>
+  <div class="panel-body">
+    <div class="profile-box" id="profileBox">
+      <!-- Filled by JS -->
+    </div>
+    <button class="edit-profile-btn" onclick="toggleEditProfile()">✏️ Edit Profile</button>
+    <div id="editProfileForm" class="edit-form hidden">
+      <div class="input-group border-green">
+        <label class="input-label green-label">✏️ Name :</label>
+        <input type="text" id="profileNameEdit" class="styled-input" placeholder="Your Name" />
+      </div>
+      <div class="input-group border-purple">
+        <label class="input-label purple-label">📱 WhatsApp :</label>
+        <input type="tel" id="profileWaEdit" class="styled-input" placeholder="+8801..." />
+      </div>
+      <div class="input-group border-red">
+        <label class="input-label red-label">🌐 FB Link :</label>
+        <input type="url" id="profileFbEdit" class="styled-input" placeholder="https://facebook.com/..." />
+      </div>
+      <button class="save-profile-btn" onclick="saveProfile()">💾 Save Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help Panel -->
+<div id="helpSection" class="section-panel hidden">
+  <div class="panel-header red-header">
+    <button class="back-btn" onclick="closeSection('helpSection')">🔙 Back</button>
+    <span class="panel-title">🔴 Help</span>
+    <button class="close-btn" onclick="closeSection('helpSection')">❌</button>
+  </div>
+  <div class="panel-body">
     <div class="help-box">
-      <p>• Click "Help" anytime to view this guide</p>
-      <p>• For support or queries:</p>
-      <br>
-      <p>📩 <strong>Contact Admin:</strong><br>
-        <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" class="help-link">https://m.me/ToR.PiccHi.JaMai.TaH.X</a>
-      </p>
-      <br>
-      <p>🌐 <strong>Telegram:</strong><br>
-        <a href="https://t.me/rksystemall" target="_blank" class="help-link">https://t.me/rksystemall</a>
-      </p>
-      <br>
-      <p>🔔 <strong>Allow Notification:</strong><br>
-        <a href="#" onclick="requestNotifPermission();return false;" class="enable-link">Click Here To Allow Permission</a>
-      </p>
+      <div class="help-title">📖 Help Guide</div>
+      <div class="help-item">• Click <strong>"Help"</strong> anytime to view this guide</div>
+      <div class="help-item">• For support or queries:</div>
+      <div class="help-item">📩 <strong>Contact Admin:</strong><br/><a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank">https://m.me/ToR.PiccHi.JaMai.TaH.X</a></div>
+      <div class="help-item">🌐 <strong>Telegram:</strong><br/><a href="https://t.me/rksystemall" target="_blank">https://t.me/rksystemall</a></div>
+      <div class="help-item">🔔 <strong>Allow Notification:</strong><br/>Click <em>"Enable"</em> below to Allow Permission</div>
+      <button class="notif-enable-btn" onclick="requestNotificationPermission()">🔔 Enable Notifications</button>
     </div>
-  </section>
+  </div>
+</div>
 
-  <!-- ═══════════════════════════════════════
-       FOOTER
-  ════════════════════════════════════════ -->
-  <footer class="site-footer">
-    <div class="footer-inner">
-      <p class="footer-note">💌 কোনো সমস্যা হলে Admin-এর সাথে যোগাযোগ করুন।</p>
-      <div class="footer-btns">
-        <a href="https://m.me/ToR.PiccHi.JaMai.TaH.X" target="_blank" class="footer-btn contact-btn">📩 Contact Admin</a>
-        <a href="https://t.me/rksystemall" target="_blank" class="footer-btn tg-btn">🚀 Join Telegram</a>
-      </div>
-    </div>
-
-    <!-- Ad Section -->
-    <div class="ad-section" id="adSection">
-      <div class="ad-frame">
-        <div class="ad-label">📢 Advertisement</div>
-        <div id="adContainer">
-          <!-- Ad script injected by app.js if ads enabled -->
-        </div>
-      </div>
-    </div>
-  </footer>
-
-</div><!-- /mainApp -->
-
-<!-- ═══════════════════════════════════════
-     POPUPS / MODALS
-════════════════════════════════════════ -->
+<!-- ============================================
+     POPUPS
+============================================ -->
 
 <!-- Message Sent Popup -->
-<div class="overlay" id="sentOverlay" style="display:none;">
+<div id="sentPopup" class="popup-overlay hidden">
   <div class="popup-box">
-    <div class="popup-icon">✅</div>
-    <h3 class="popup-title green-text">Message Sent Successful!</h3>
-    <p>Wait For Admin Reply...!</p>
-    <button class="save-btn ripple" onclick="openReceived()">✔ Check Reply</button>
+    <div class="popup-title">✅ Message Sent Successful!</div>
+    <div class="popup-text">Wait For Admin Reply...!</div>
+    <button class="popup-check-btn" onclick="closeSentPopup()">✔ Check Received</button>
   </div>
 </div>
 
 <!-- Notification Permission Popup -->
-<div class="overlay" id="notifOverlay" style="display:none;">
+<div id="notifPopup" class="popup-overlay hidden">
   <div class="popup-box">
-    <div class="popup-icon">📢</div>
-    <h3 class="popup-title">Please Allow Notification</h3>
-    <p>Admin Reply পাওয়ার জন্য Notification Allow করুন।</p>
-    <p style="font-size:0.85em;opacity:0.7;">(আপনি চাইলে Home এ গিয়ে Received History থেকেও দেখতে পারেন)</p>
+    <div class="popup-title">📢 Allow Notifications?</div>
+    <div class="popup-text">Please Allow Notification For Instant Receive Admin Notification</div>
+    <p style="font-size:0.82rem;color:#aaa;">(আপনি চাইলে Home এ গিয়ে Received History থেকে মেসেজ দেখতে পারেন)</p>
     <div class="popup-btns">
-      <button class="save-btn ripple" onclick="allowNotif()">✅ Allow</button>
-      <button class="ctrl-btn" onclick="closeNotifPopup()">❌ Not Now</button>
+      <button class="popup-allow-btn" onclick="requestNotificationPermission()">Allow</button>
+      <button class="popup-notnow-btn" onclick="closeNotifPopup()">Not Now</button>
     </div>
   </div>
 </div>
 
-<!-- New Reply Popup -->
-<div class="overlay" id="replyOverlay" style="display:none;">
-  <div class="popup-box love-popup">
-    <div class="popup-icon">💌</div>
-    <h3 class="popup-title">NEW REPLY MESSAGE</h3>
-    <p>📩 <strong>From Admin</strong></p>
-    <div class="reply-msg-box" id="replyMsgContent"></div>
-    <p class="reply-time" id="replyMsgTime"></p>
+<!-- Reply Message Popup -->
+<div id="replyPopup" class="popup-overlay hidden">
+  <div class="popup-box">
+    <div class="popup-title">💌 NEW REPLY MESSAGE</div>
+    <div class="popup-text" id="replyPopupMsg">Loading...</div>
+    <div class="popup-time" id="replyPopupTime"></div>
     <div class="popup-btns">
-      <button class="ctrl-btn" onclick="closeReplyPopup()">❌ Close Popup</button>
-      <button class="save-btn ripple" onclick="goToReply()">💬 Click To Reply</button>
+      <button class="popup-close-btn" onclick="closeReplyPopup()">❌ Close</button>
+      <button class="popup-reply-btn" onclick="goToReply()">💬 Click To Reply</button>
     </div>
   </div>
 </div>
 
 <!-- Broadcast Popup -->
-<div class="overlay" id="broadcastOverlay" style="display:none;">
-  <div class="popup-box">
-    <div class="popup-icon">📢</div>
-    <h3 class="popup-title">ADMIN BROADCAST</h3>
-    <div class="reply-msg-box" id="broadcastContent"></div>
-    <p class="reply-time" id="broadcastTime"></p>
-    <button class="ctrl-btn" onclick="closeBroadcast()">🔘 Close Popup</button>
+<div id="broadcastPopup" class="popup-overlay hidden">
+  <div class="popup-box broadcast-box">
+    <div class="popup-title">📢 ADMIN BROADCAST</div>
+    <div class="popup-text" id="broadcastMsg">Loading...</div>
+    <div class="popup-time" id="broadcastTime"></div>
+    <button class="popup-close-btn" onclick="closeBroadcastPopup()">Close Popup</button>
   </div>
 </div>
 
-<!-- New Caption Popup -->
-<div class="overlay" id="captionPopupOverlay" style="display:none;">
+<!-- Caption Added Popup -->
+<div id="captionPopup" class="popup-overlay hidden">
   <div class="popup-box">
-    <div class="popup-icon">📝</div>
-    <h3 class="popup-title">NEW CAPTION ADDED</h3>
-    <div class="reply-msg-box" id="captionPopupContent"></div>
-    <p class="reply-time" id="captionPopupTime"></p>
-    <button class="ctrl-btn" onclick="closeCaptionPopup()">🔘 Close Popup</button>
+    <div class="popup-title">📝 NEW CAPTION ADDED</div>
+    <div class="popup-text" id="captionPopupText">Loading...</div>
+    <div class="popup-time" id="captionPopupTime"></div>
+    <button class="popup-close-btn" onclick="closeCaptionPopup()">Close Popup</button>
   </div>
 </div>
 
-<!-- Edit Caption Popup -->
-<div class="overlay" id="editCaptionOverlay" style="display:none;">
-  <div class="popup-box">
-    <h3 class="popup-title">✏️ Edit Caption</h3>
-    <textarea id="editCaptionInput" class="field-input" rows="4"></textarea>
-    <input type="hidden" id="editCaptionId" />
-    <div class="popup-btns">
-      <button class="save-btn ripple" onclick="saveEditCaption()">💾 Save</button>
-      <button class="ctrl-btn" onclick="closeEditCaption()">❌ Cancel</button>
-    </div>
-  </div>
-</div>
+<!-- Touch Ripple -->
+<div id="ripple" class="ripple"></div>
 
-<!-- Generic Toast -->
-<div class="toast" id="toast"></div>
-
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
-
-<!-- App Logic -->
-<script src="/app.js"></script>
+<!-- ============================================
+     SCRIPTS
+============================================ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/app.js"></script>
 
 </body>
 </html>
