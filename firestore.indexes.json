@@ -1,0 +1,44 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "sentMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userID", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "adminReplies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toUID", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "adminReplies",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "toUID", "order": "ASCENDING" },
+        { "fieldPath": "seenByUser", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "captions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "addedBy", "order": "ASCENDING" },
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "broadcasts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "timestamp", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

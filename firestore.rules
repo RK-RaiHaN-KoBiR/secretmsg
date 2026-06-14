@@ -1,0 +1,70 @@
+// =============================================
+// FIRESTORE SECURITY RULES
+// cithi-pathan project
+// Deploy: Firebase Console > Firestore > Rules
+// =============================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users collection:
+    // - Anyone can READ their own user doc (by uid)
+    // - Anyone can CREATE their own user doc
+    // - Anyone can UPDATE their own user doc (name, whatsapp, etc)
+    // - No one can delete from client (only admin bot via server)
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Sent Messages (user → admin):
+    // - User can create their own messages
+    // - User can read their own messages (by userID)
+    // - No client-side delete (admin bot handles it)
+    match /sentMessages/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Admin Replies (admin → user):
+    // - Anyone can read (user reads their own in app)
+    // - Only server can write (via API)
+    // - Client can update seenByUser field only
+    match /adminReplies/{docId} {
+      allow read: if true;
+      allow create: if false; // Server only
+      allow update: if request.resource.data.keys().hasOnly(['seenByUser', 'seenTime', 'seenDate']);
+      allow delete: if false;
+    }
+
+    // Captions: readable by all, writable by users
+    match /captions/{docId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if true;
+    }
+
+    // Broadcasts: readable by all, server-write only
+    match /broadcasts/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // System config: readable, server-write only
+    match /_system/{docId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // Counters: anyone can read/write (needed for sequential IDs)
+    match /_counters/{docId} {
+      allow read, write: if true;
+    }
+  }
+}

@@ -1,0 +1,39 @@
+# =============================================
+# RENDER.COM DEPLOYMENT CONFIG
+# For running the standalone Telegram bot
+# =============================================
+# 
+# 1. Go to render.com → New → Web Service
+# 2. Connect your GitHub repo
+# 3. Set these settings:
+#    - Build Command: npm install
+#    - Start Command: node bot/bot.js
+#    - Environment: Node
+# 4. Add all environment variables from .env.example
+# =============================================
+
+services:
+  - type: worker
+    name: cithi-pathan-bot
+    runtime: node
+    buildCommand: npm install
+    startCommand: node bot/bot.js
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ADMIN_CHAT_ID
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: WEBSITE_URL
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        sync: false

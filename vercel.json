@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "name": "cithipathan",
+  "name": "cithi-pathan",
   "builds": [
     {
       "src": "public/**",
       "use": "@vercel/static"
     },
     {
-      "src": "api/*.js",
+      "src": "api/**/*.js",
       "use": "@vercel/node"
     }
   ],
@@ -17,43 +17,20 @@
       "dest": "/api/$1"
     },
     {
-      "src": "/sw.js",
-      "dest": "/public/sw.js",
-      "headers": {
-        "Service-Worker-Allowed": "/",
-        "Cache-Control": "no-cache"
-      }
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/public/manifest.json"
-    },
-    {
-      "src": "/(.*\\.(css|js|png|jpg|jpeg|gif|svg|ico|webp|woff|woff2|ttf|eot))",
-      "dest": "/public/$1"
-    },
-    {
       "src": "/(.*)",
-      "dest": "/public/index.html"
+      "dest": "/public/$1"
     }
   ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
-      ]
-    },
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-XSS-Protection", "value": "1; mode=block" },
-        { "key": "Referrer-Policy", "value": "no-referrer" }
-      ]
-    }
-  ]
+  "env": {
+    "TELEGRAM_BOT_TOKEN": "@telegram_bot_token",
+    "ADMIN_CHAT_ID": "@admin_chat_id",
+    "FIREBASE_PROJECT_ID": "@firebase_project_id",
+    "FIREBASE_PRIVATE_KEY": "@firebase_private_key",
+    "FIREBASE_CLIENT_EMAIL": "@firebase_client_email",
+    "VAPID_PUBLIC_KEY": "@vapid_public_key",
+    "VAPID_PRIVATE_KEY": "@vapid_private_key",
+    "VAPID_EMAIL": "@vapid_email",
+    "WEBSITE_URL": "@website_url",
+    "API_SECRET": "@api_secret"
+  }
 }
